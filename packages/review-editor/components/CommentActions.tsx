@@ -9,6 +9,16 @@ interface CommentActionsProps {
   /** When provided, shows the delete/close button (right-most). Omitted for
    *  read-only (e.g. externally-sourced) comments. */
   onDelete?: () => void;
+  /** When provided, shows Ask — answer this one thread now, without sending
+   *  the whole batch. Omitted when no agent is available. */
+  onAsk?: () => void;
+  /** True while this thread's Ask is running. */
+  isAsking?: boolean;
+  /** When provided, shows the resolve toggle. A resolved thread stops
+   *  travelling to the agent; it is never deleted. */
+  onToggleResolved?: () => void;
+  /** Current thread state, for the toggle's label and icon. */
+  isResolved?: boolean;
 }
 
 const ACTION_BTN = 'p-1 rounded text-muted-foreground transition-colors';
@@ -16,16 +26,56 @@ const ACTION_BTN = 'p-1 rounded text-muted-foreground transition-colors';
 /**
  * The single hover-revealed action row shared by every comment card (inline
  * diff, sidebar, file banner). Bottom-aligned, right-justified, order
- * left→right: edit · copy · delete (so the close/delete sits furthest right).
- * The parent card must carry the Tailwind `group` class for the hover reveal.
+ * left→right: ask · resolve · edit · copy · delete (so the close/delete sits
+ * furthest right). The parent card must carry the Tailwind `group` class for
+ * the hover reveal.
+ *
+ * The resolve toggle stays visible on a resolved thread rather than hiding
+ * with the rest of the row — a reviewer must be able to reopen a thread
+ * without hunting for the control.
  */
-export const CommentActions: React.FC<CommentActionsProps> = ({ onEdit, copyText, onDelete }) => {
-  if (!onEdit && !copyText && !onDelete) return null;
+export const CommentActions: React.FC<CommentActionsProps> = ({
+  onEdit,
+  copyText,
+  onDelete,
+  onAsk,
+  isAsking = false,
+  onToggleResolved,
+  isResolved = false,
+}) => {
+  if (!onEdit && !copyText && !onDelete && !onAsk && !onToggleResolved) return null;
   return (
   <div
-    className="flex items-center justify-end gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+    className={`flex items-center justify-end gap-1 mt-1.5 transition-opacity ${
+      isResolved ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+    }`}
     onClick={(e) => e.stopPropagation()}
   >
+    {onAsk && !isResolved && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onAsk(); }}
+        disabled={isAsking}
+        className={`${ACTION_BTN} hover:bg-muted hover:text-foreground text-[10px] px-1.5 disabled:opacity-50`}
+        title="Answer this comment now"
+        data-testid="comment-ask"
+      >
+        {isAsking ? 'Asking…' : 'Ask'}
+      </button>
+    )}
+    {onToggleResolved && (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleResolved(); }}
+        className={`${ACTION_BTN} text-[10px] px-1.5 ${
+          isResolved ? 'text-success hover:bg-muted' : 'hover:bg-muted hover:text-foreground'
+        }`}
+        title={isResolved ? 'Reopen this thread' : 'Resolve this thread'}
+        data-testid="comment-resolve"
+      >
+        {isResolved ? 'Resolved' : 'Resolve'}
+      </button>
+    )}
     {onEdit && (
       <button
         type="button"

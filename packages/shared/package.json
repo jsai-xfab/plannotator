@@ -9,6 +9,7 @@
     "./crypto": "./crypto.ts",
     "./diff-paths": "./diff-paths.ts",
     "./source-lines": "./source-lines.ts",
+    "./thread-resolution": "./thread-resolution.ts",
     "./feedback-templates": "./feedback-templates.ts",
     "./jj-core": "./jj-core.ts",
     "./gitbutler-core": "./gitbutler-core.ts",

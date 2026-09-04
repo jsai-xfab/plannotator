@@ -61,6 +61,7 @@ import { useCallFlowAnalysis } from './hooks/useCallFlowAnalysis';
 import { useCallFlowInstall } from './hooks/useCallFlowInstall';
 import { useCallFlowAutoInstall } from './hooks/useCallFlowAutoInstall';
 import { extractLinesFromPatch, isLineRangeInPatch } from './utils/patchParser';
+import { resolveThreadState, threadRootId } from '@plannotator/shared/thread-resolution';
 import { resolveCallFlowAnnotationPlacement } from './utils/callFlowAnnotations';
 import {
   shouldHandleReviewSearchShortcut,
@@ -369,6 +370,10 @@ const ReviewApp: React.FC = () => {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const activeFileIndexRef = useRef(activeFileIndex);
   activeFileIndexRef.current = activeFileIndex;
+  // The thread whose Ask is running, and which AI entry carries its answer.
+  // One at a time: a second Ask before the first lands would race for the reply.
+  const [askingAnnotationId, setAskingAnnotationId] = useState<string | null>(null);
+  const askingAnnotationIdRef = useRef<{ annotationId: string; entryIndex: number } | null>(null);
   const [annotations, setAnnotations] = useState<CodeAnnotation[]>([]);
   const annotationsRef = useRef(annotations);
   annotationsRef.current = annotations;
@@ -1158,6 +1163,10 @@ const ReviewApp: React.FC = () => {
     resetSession: resetAISession,
     sessionId: aiSessionId,
   } = aiChat;
+  // Read when an Ask is launched, so the answer's entry index is recorded
+  // without making every Ask handler depend on the streaming message list.
+  const aiMessagesRef = useRef(aiMessages);
+  aiMessagesRef.current = aiMessages;
 
   const codeNav = useCodeNav();
   // The other half of the held-modifier gesture. The diff views paint
@@ -2407,6 +2416,112 @@ const ReviewApp: React.FC = () => {
   // delete buttons) that only republish on item version bumps — a closure over
   // the state value goes stale and would leave a dangling selection id after
   // deleting the currently-selected annotation.
+  // Thread roots the reviewer or the agent marked resolved. Derived, so an
+  // agent's PATCH through the external store shows up without extra wiring.
+  const resolvedAnnotationIds = useMemo(
+    () => new Set(allAnnotations.filter(a => a.resolved === true).map(a => a.id)),
+    [allAnnotations],
+  );
+
+  /**
+   * Ask — answer one thread now, instead of sending the whole batch.
+   *
+   * The question carries the reviewer's comment plus the lines it is anchored
+   * to, so the agent answers about the right code. The answer comes back as a
+   * reply in the thread rather than only in the AI sidebar, because the point
+   * of asking is to decide whether the thread can be resolved.
+   *
+   * The thread is NOT resolved here. An answer is not a change: the reviewer
+   * reads it and resolves.
+   */
+  const handleAskAnnotation = useCallback((id: string) => {
+    const all = allAnnotationsRef.current;
+    const annotation = all.find(a => a.id === id);
+    if (!annotation || askingAnnotationIdRef.current) return;
+    const file = files.find(f => f.path === annotation.filePath);
+    const selectedCode = file
+      ? extractLinesFromPatch(file.patch, annotation.lineStart, annotation.lineEnd, annotation.side)
+      : '';
+    askingAnnotationIdRef.current = { annotationId: id, entryIndex: aiMessagesRef.current.length };
+    setAskingAnnotationId(id);
+    askAI({
+      prompt:
+        `A reviewer left this comment on the diff. Answer it directly and briefly. ` +
+        `Do not change any files — this is a question, not a request for a change.\n\n` +
+        `Comment: ${annotation.text ?? ''}`,
+      filePath: annotation.filePath || undefined,
+      lineStart: annotation.filePath ? annotation.lineStart : undefined,
+      lineEnd: annotation.filePath ? annotation.lineEnd : undefined,
+      side: annotation.filePath ? annotation.side : undefined,
+      selectedCode: selectedCode || undefined,
+    });
+  }, [askAI, files]);
+
+  // Land a finished Ask answer in its thread. Watching the entry recorded at
+  // ask time keeps the reply attached to the right comment even when the
+  // reviewer asks about something else in the sidebar meanwhile.
+  useEffect(() => {
+    const pending = askingAnnotationIdRef.current;
+    if (!pending) return;
+    const entry = aiMessages[pending.entryIndex];
+    if (!entry || entry.response.isStreaming) return;
+    askingAnnotationIdRef.current = null;
+    setAskingAnnotationId(null);
+    const text = entry.response.error
+      ? `Ask failed: ${entry.response.error}`
+      : entry.response.text.trim();
+    if (!text) return;
+    const parent = allAnnotationsRef.current.find(a => a.id === pending.annotationId);
+    if (!parent) return;
+    const reply: CodeAnnotation = {
+      id: `ask-${pending.annotationId}-${Date.now()}`,
+      type: 'comment',
+      scope: parent.scope,
+      filePath: parent.filePath,
+      lineStart: parent.lineStart,
+      lineEnd: parent.lineEnd,
+      side: parent.side,
+      text,
+      createdAt: Date.now(),
+      author: 'agent',
+      inReplyTo: pending.annotationId,
+    };
+    annotationsRef.current = [...annotationsRef.current, reply];
+    setAnnotations(annotationsRef.current);
+  }, [aiMessages]);
+
+  /**
+   * Resolve or reopen the thread an annotation belongs to.
+   *
+   * The state lands on the thread ROOT, so resolving from a reply resolves the
+   * whole thread. A resolved thread stops travelling to the agent; nothing is
+   * deleted, and the same control reopens it.
+   *
+   * An externally-sourced annotation (an agent finding) lives in the external
+   * store, so its resolve is a PATCH rather than local state.
+   */
+  const handleToggleAnnotationResolved = useCallback((id: string) => {
+    const all = allAnnotationsRef.current;
+    const rootId = threadRootId(all, id);
+    const root = all.find(a => a.id === rootId);
+    if (!root) return;
+    const nextResolved = root.resolved !== true;
+    if (root.source && externalAnnotations.some(e => e.id === rootId)) {
+      updateExternalAnnotation(rootId, nextResolved
+        ? { resolved: true, resolvedAt: Date.now(), resolvedBy: 'user' }
+        : { resolved: false, resolvedAt: undefined, resolvedBy: undefined });
+      return;
+    }
+    annotationsRef.current = resolveThreadState(
+      annotationsRef.current,
+      rootId,
+      nextResolved,
+      'user',
+      Date.now(),
+    );
+    setAnnotations(annotationsRef.current);
+  }, [externalAnnotations, updateExternalAnnotation]);
+
   const handleDeleteAnnotation = useCallback((id: string) => {
     const ann = allAnnotationsRef.current.find(a => a.id === id);
     if (ann?.source) reviewHistory.clear();
@@ -3548,6 +3663,10 @@ const ReviewApp: React.FC = () => {
     onSelectAnnotation: handleSelectAnnotation,
     onNavigateToAnnotation: handleNavigateToAnnotation,
     onDeleteAnnotation: handleDeleteAnnotation,
+    resolvedAnnotationIds,
+    onToggleAnnotationResolved: handleToggleAnnotationResolved,
+    onAskAnnotation: aiUIEnabled ? handleAskAnnotation : undefined,
+    askingAnnotationId,
     descriptionAnnotations: visibleDescriptionAnnotations,
     selectedDescriptionAnnotationId,
     onAddDescriptionAnnotation: handleAddDescriptionAnnotation,

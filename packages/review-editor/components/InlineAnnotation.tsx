@@ -4,6 +4,7 @@ import { SuggestionBlock } from './SuggestionBlock';
 import { CommentMeta } from './CommentMeta';
 import { CommentActions } from './CommentActions';
 import { renderInlineMarkdown } from '../utils/renderInlineMarkdown';
+import { useReviewStateOptional } from '../dock/ReviewStateContext';
 
 interface InlineAnnotationProps {
   metadata: DiffAnnotationMetadata;
@@ -12,6 +13,14 @@ interface InlineAnnotationProps {
   onSelect: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Answer this one thread now. Omitted when no agent is available. */
+  onAsk?: (id: string) => void;
+  /** True while this thread's Ask is running. */
+  isAsking?: boolean;
+  /** Resolve or reopen this thread. Omitted on a read-only surface. */
+  onToggleResolved?: (id: string) => void;
+  /** True when this thread's root is resolved. */
+  isResolved?: boolean;
 }
 
 /** Renders a single annotation comment inside the diff view */
@@ -22,13 +31,30 @@ export const InlineAnnotation: React.FC<InlineAnnotationProps> = ({
   onSelect,
   onEdit,
   onDelete,
+  onAsk,
+  isAsking,
+  onToggleResolved,
+  isResolved,
 }) => {
   const severity = metadata.severity ? SEVERITY_STYLES[metadata.severity] : null;
+  // Thread state comes from the review session rather than through
+  // AllFilesCodeView and DiffViewer, which are presentational and would
+  // otherwise both need to forward four props they never read. Explicit props
+  // still win, so a host rendering this card outside a session can supply them.
+  const session = useReviewStateOptional();
+  const id = metadata.annotationId;
+  const resolved = isResolved ?? session?.resolvedAnnotationIds.has(id) ?? false;
+  const asking = isAsking ?? session?.askingAnnotationId === id;
+  const ask = onAsk ?? session?.onAskAnnotation;
+  const askThread = ask ? () => ask(id) : undefined;
+  const toggle = onToggleResolved ?? session?.onToggleAnnotationResolved;
+  const toggleResolved = toggle ? () => toggle(id) : undefined;
 
   return (
     <div
-      className={`review-comment group${isSelected ? ' is-selected' : ''}`}
+      className={`review-comment group${isSelected ? ' is-selected' : ''}${resolved ? ' is-resolved' : ''}`}
       data-annotation-id={metadata.annotationId}
+      data-resolved={resolved ? 'true' : undefined}
       onClick={() => onSelect(metadata.annotationId)}
     >
       <CommentMeta
@@ -61,6 +87,10 @@ export const InlineAnnotation: React.FC<InlineAnnotationProps> = ({
         onEdit={() => onEdit(metadata.annotationId)}
         copyText={metadata.copyText}
         onDelete={() => onDelete(metadata.annotationId)}
+        onAsk={askThread}
+        isAsking={asking}
+        onToggleResolved={toggleResolved}
+        isResolved={resolved}
       />
     </div>
   );

@@ -81,6 +81,14 @@ export interface Annotation {
   prUrl?: string; // code-review PR mode: the PR this note belongs to, so it isn't shown/exported against another PR after an in-place switch
   pageUrl?: string; // set only by live app annotate sessions: the page (pathname + search) the annotation was made on; restore filters to the current page and export groups by page
   inReplyTo?: string; // id of the annotation this one replies to; a reply inherits its parent's anchor, renders indented under it in the panel, and exports grouped under it. Additive: annotations without it render and export exactly as before.
+  /** Thread state, set on the thread ROOT only — a thread resolves as a unit.
+   *  A resolved thread collapses in the panel, leaves the Send Feedback
+   *  payload, and is never deleted. Additive. */
+  resolved?: boolean;
+  resolvedAt?: number;
+  /** Who resolved it. The agent may only set "agent" when it actually made the
+   *  change it was asked for. */
+  resolvedBy?: 'user' | 'agent';
   htmlAnchor?: HtmlElementAnchor; // raw-HTML pinpoint: serialized element anchor for reliable restoration
   htmlAdditionalTargets?: HtmlAnnotationTarget[]; // raw-HTML shift-click multi-select: extra elements this one comment covers (primary stays htmlAnchor/originalText)
   // web-highlighter metadata for cross-element selections
@@ -252,6 +260,19 @@ export interface CodeAnnotation {
   createdAt: number;
   author?: string;
   source?: string; // External tool identifier (e.g., "eslint") — set when annotation comes from external API
+  /** id of the annotation this one replies to. Same rules as Annotation.inReplyTo:
+   *  a reply inherits its parent's anchor and renders indented under it. The
+   *  agent answers a reviewer's comment by posting one of these. Additive. */
+  inReplyTo?: string;
+  /** Thread state, set on the thread ROOT only — a thread resolves as a unit.
+   *  A resolved thread collapses in the panel, leaves the Send Feedback
+   *  payload, and is never deleted. Additive: an annotation without these
+   *  behaves exactly as before. */
+  resolved?: boolean;
+  resolvedAt?: number;
+  /** Who resolved it. The agent may only set "agent" when it actually made the
+   *  change — a silently resolved thread is a lost review comment. */
+  resolvedBy?: 'user' | 'agent';
   severity?: 'important' | 'nit' | 'pre_existing'; // Agent review severity (Claude)
   reasoning?: string; // Validation chain — how the issue was confirmed (Claude)
   reviewProfileLabel?: string; // Custom review that produced this finding — shown as a tag

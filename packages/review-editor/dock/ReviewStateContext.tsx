@@ -101,6 +101,16 @@ export interface ReviewState {
   /** Select AND scroll the diff to a comment (sidebar / findings-list click). */
   onNavigateToAnnotation: (id: string | null) => void;
   onDeleteAnnotation: (id: string) => void;
+  /** Roots of threads the reviewer or the agent marked resolved. A resolved
+   *  thread stops travelling to the agent but is never deleted. */
+  resolvedAnnotationIds: Set<string>;
+  /** Resolve or reopen the thread this annotation belongs to. */
+  onToggleAnnotationResolved: (id: string) => void;
+  /** Answer this one thread now, without sending the whole batch. Undefined
+   *  when no agent is available. */
+  onAskAnnotation?: (id: string) => void;
+  /** The thread whose Ask is currently running, if any. */
+  askingAnnotationId?: string | null;
 
   // PR description prose annotations (comment-only; text-anchored Annotation[],
   // kept separate from the diff CodeAnnotation[] above).

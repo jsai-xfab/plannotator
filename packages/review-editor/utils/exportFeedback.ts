@@ -2,6 +2,7 @@ import type { CodeAnnotation, ConventionalLabel, ConventionalDecoration, Comment
 import type { PRMetadata } from '@plannotator/shared/pr-types';
 import { getMRLabel, getMRNumberLabel, getDisplayRepo } from '@plannotator/shared/pr-types';
 import { exportAnnotations, parseMarkdownToBlocks } from '@plannotator/ui/utils/parser';
+import { openThreadItems } from '@plannotator/shared/thread-resolution';
 import { artifactAnchorLabel } from './artifactAnnotations';
 
 /**
@@ -311,11 +312,14 @@ function renderScopedGroups(annotations: CodeAnnotation[], headingLevel: string,
 }
 
 export function exportReviewFeedback(
-  annotations: CodeAnnotation[],
+  allAnnotations: CodeAnnotation[],
   prMeta?: PRMetadata | null,
   diffContext?: FeedbackDiffContext,
   prReviewScope?: string,
 ): string {
+  // A resolved thread has already been acted on, so it stops travelling to the
+  // agent — root and replies together. Reopening it puts it back.
+  const annotations = openThreadItems(allAnnotations);
   if (annotations.length === 0) {
     return '# Code Review\n\nNo feedback provided.';
   }
