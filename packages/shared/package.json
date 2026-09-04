@@ -11,6 +11,7 @@
     "./source-lines": "./source-lines.ts",
     "./thread-resolution": "./thread-resolution.ts",
     "./since-review": "./since-review.ts",
+    "./guide-groups": "./guide-groups.ts",
     "./round-store": "./round-store.ts",
     "./feedback-templates": "./feedback-templates.ts",
     "./jj-core": "./jj-core.ts",

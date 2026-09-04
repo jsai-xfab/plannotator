@@ -17,6 +17,12 @@ export const GUIDE_ENGINE_LABEL = {
   copilot: 'Copilot',
 } as const;
 
+/** Client-facing pseudo job-id prefix for persisted guides ("saved:{id}").
+ *  Lives here rather than in guide-store because the review app needs it and
+ *  that store is node-bound — importing it into the browser bundle would drag
+ *  `fs` and `path` in for one string. guide-store re-exports it. */
+export const SAVED_GUIDE_ID_PREFIX = 'saved:';
+
 export interface GuideDiffRef {
   /** Repo-relative path; must match a DiffFile.path in the current review patch. */
   file: string;

@@ -11,9 +11,17 @@ import type { ReviewPanelView } from '../components/PanelViewToggle';
  */
 export function resolvePanelView(
   selected: ReviewPanelView,
-  capabilities: { sectionsAvailable: boolean; commitsCapable: boolean },
+  capabilities: {
+    sectionsAvailable: boolean;
+    commitsCapable: boolean;
+    /** A Guided Review exists to group by. False before one is generated. */
+    groupsAvailable?: boolean;
+  },
 ): ReviewPanelView {
   if (selected === 'sections') return capabilities.sectionsAvailable ? 'sections' : 'tree';
   if (selected === 'commits') return capabilities.commitsCapable ? 'commits' : 'tree';
+  // A remembered Groups selection outlives the guide it was made against, so
+  // it must fall back like the others rather than render an empty panel.
+  if (selected === 'groups') return capabilities.groupsAvailable ? 'groups' : 'tree';
   return 'tree';
 }
