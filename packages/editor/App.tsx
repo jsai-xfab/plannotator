@@ -13,6 +13,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallba
 import { toast, Toaster } from 'sonner';
 import { type Origin, getAgentName } from '@plannotator/shared/agents';
 import { shouldStripFrontmatter } from '@plannotator/shared/annotatable';
+import { threadRootId } from '@plannotator/shared/thread-resolution';
 import { setExtraMarkdownExtensions } from '@plannotator/ui/utils/markdownExtensions';
 import { annotateFileFeedback, annotateMessageFeedback, wrapFeedbackForClipboard, type AnnotateFeedbackTemplates } from '@plannotator/shared/feedback-templates';
 import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, Frontmatter, type LinkedDocAnnotationEntry, type MessageAnnotationEntry } from '@plannotator/ui/utils/parser';
@@ -4207,6 +4208,26 @@ const App: React.FC = () => {
     editAnnotation(id, updates, 'record');
   const editAnnotationSilently = (id: string, updates: Partial<Annotation>) =>
     editAnnotation(id, updates, 'silent');
+  /**
+   * Resolve or reopen the thread this annotation belongs to.
+   *
+   * Always writes to the thread ROOT, so resolving from anywhere in a thread
+   * resolves the whole thread. Routed through editAnnotation so an external
+   * (agent-written) annotation is PATCHed and a local one is recorded in
+   * history — the same split every other edit here uses.
+   */
+  const handleToggleAnnotationResolved = (id: string) => {
+    const rootId = threadRootId(allAnnotations, id);
+    const root = allAnnotations.find(a => a.id === rootId);
+    if (!root) return;
+    editAnnotation(
+      rootId,
+      root.resolved
+        ? { resolved: false, resolvedAt: undefined, resolvedBy: undefined }
+        : { resolved: true, resolvedAt: Date.now(), resolvedBy: 'user' },
+      'record',
+    );
+  };
 
   // WebMCP (browser-agent tools). The hook detects `document.modelContext`
   // once and does nothing in a browser without it; the banner state below
@@ -5639,6 +5660,7 @@ const App: React.FC = () => {
       selectedId={selectedAnnotationId ?? selectedCodeAnnotationId}
       onSelect={handleSelectAnnotation}
       onDelete={handleDeleteAnnotation}
+      onToggleResolved={handleToggleAnnotationResolved}
       onEdit={handleEditAnnotation}
       codeAnnotations={codeAnnotations}
       onSelectCodeAnnotation={handleSelectCodeAnnotation}

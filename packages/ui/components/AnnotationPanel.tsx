@@ -100,6 +100,9 @@ interface PanelProps {
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit?: (id: string, updates: Partial<Annotation>) => void;
+  /** Resolve or reopen a thread by its root id. Omit to hide the control —
+   *  a host that does not persist thread state should not offer it. */
+  onToggleResolved?: (id: string) => void;
   selectedId: string | null;
   codeAnnotations?: CodeAnnotation[];
   onSelectCodeAnnotation?: (id: string) => void;
@@ -145,6 +148,7 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   onSelect,
   onDelete,
   onEdit,
+  onToggleResolved,
   selectedId,
   codeAnnotations = [],
   onSelectCodeAnnotation,
@@ -309,6 +313,13 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
                   onSelect={() => onSelect(entry.annotation.id)}
                   onDelete={() => onDelete(entry.annotation.id)}
                   onEdit={onEdit ? (updates: Partial<Annotation>) => onEdit(entry.annotation.id, updates) : undefined}
+                  // Roots only: a thread resolves as a unit, so a reply card
+                  // (rendered above) carries no resolve control.
+                  onToggleResolved={
+                    onToggleResolved && !readOnly
+                      ? () => onToggleResolved(entry.annotation.id)
+                      : undefined
+                  }
                   readOnly={readOnly}
                   footer={renderCardFooter?.(entry.annotation)}
                   unanchored={unanchoredIds?.has(entry.annotation.id) ?? false}
@@ -538,11 +549,14 @@ const AnnotationCard: React.FC<{
   onSelect: () => void;
   onDelete: () => void;
   onEdit?: (updates: Partial<Annotation>) => void;
+  /** Resolve or reopen this thread. Omitted on a read-only surface, or on a
+   *  host that does not track thread state. */
+  onToggleResolved?: () => void;
   readOnly?: boolean;
   footer?: React.ReactNode;
   /** The annotation has no live location in the document (host-reported). */
   unanchored?: boolean;
-}> = ({ annotation, isSelected, isMe, onSelect, onDelete, onEdit, readOnly = false, footer, unanchored = false }) => {
+}> = ({ annotation, isSelected, isMe, onSelect, onDelete, onEdit, onToggleResolved, readOnly = false, footer, unanchored = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(annotation.text || '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -669,6 +683,19 @@ const AnnotationCard: React.FC<{
                 title="Edit annotation"
               >
                 <PencilIcon />
+              </button>
+            )}
+            {onToggleResolved && (
+              <button
+                type="button"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onToggleResolved(); }}
+                className={`relative rounded-md px-1.5 py-1 text-[10px] transition-colors before:absolute before:-inset-1.5 before:content-[''] ${
+                  annotation.resolved ? 'text-success' : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title={annotation.resolved ? 'Reopen this thread' : 'Resolve this thread'}
+                data-testid="annotation-resolve"
+              >
+                {annotation.resolved ? 'Resolved' : 'Resolve'}
               </button>
             )}
             <button

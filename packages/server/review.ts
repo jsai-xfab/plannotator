@@ -1381,6 +1381,26 @@ export async function startReviewServer(
           }
         }
 
+        // A walkthrough that spends a chapter on a lockfile repeats the problem
+        // the source-only diff exists to solve, so the guide plans against
+        // source files only. Filtering here covers both the launch patch and
+        // the recomputed list above, and it is presentation-side: the diff data
+        // itself is untouched, and a reviewer showing generated files does not
+        // regenerate the guide (guideContext records what it was built against).
+        // Every file dropping out would leave the guide nothing to describe, so
+        // that case keeps the full list rather than failing the job.
+        try {
+          const generated = await buildGeneratedFilesSidecar(launchPatch, currentDiffType as string);
+          if (generated && generated.length > 0) {
+            const hidden = new Set(generated);
+            const sourceOnly = changedFiles.filter((f) => !hidden.has(f.path));
+            if (sourceOnly.length > 0) changedFiles = sourceOnly;
+          }
+        } catch {
+          // Generated detection is best-effort; an unreadable .gitattributes
+          // must not stop a guide from being generated.
+        }
+
         const repairOf = typeof config?.repairOf === "string" ? config.repairOf : undefined;
         let repair: { payload: string } | undefined;
         let guideConfig = config;

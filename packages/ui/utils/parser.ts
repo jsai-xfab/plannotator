@@ -1,6 +1,7 @@
 import type { Block, Annotation, CodeAnnotation, EditorAnnotation, ImageAttachment } from '../types';
 import { planDenyFeedback } from '@plannotator/core/feedback-templates';
 import { resolveReplyParents } from '@plannotator/core/annotation-threads';
+import { openThreadItems } from '@plannotator/core/thread-resolution';
 import { skillReferenceExportBlock } from './skillReferences';
 
 /**
@@ -1137,12 +1138,15 @@ const lineLabelForAnnotation = (blocks: Block[], ann: any): string | null => {
 
 export const exportAnnotations = (
   blocks: Block[],
-  annotations: any[],
+  allAnnotations: any[],
   globalAttachments: ImageAttachment[] = [],
   title: string = 'Plan Feedback',
   subject: string = 'plan',
   opts: ExportAnnotationsOptions = {},
 ): string => {
+  // A resolved thread has already been acted on, so it stops travelling to the
+  // agent — root and replies together. Reopening it puts it back.
+  const annotations = openThreadItems(allAnnotations);
   if (annotations.length === 0 && globalAttachments.length === 0) {
     return 'No changes detected.';
   }
