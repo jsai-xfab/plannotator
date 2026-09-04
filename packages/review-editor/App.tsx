@@ -354,8 +354,21 @@ const ReviewApp: React.FC = () => {
   const isCompactTouchLayout = useCompactTouchLayout();
   const { resolvedMode } = useTheme();
   const [diffData, setDiffData] = useState<DiffData | null>(null);
+  // What the reviewer sees. Generated files are absent unless the reviewer asks
+  // for them, so every index-based consumer (the tree, activeFileIndex, the
+  // keyboard shortcuts) stays coherent with one list.
   const [files, setFiles] = useState<DiffFile[]>([]);
+  // Every changed file the diff carried, generated ones included. The toggle
+  // reads this to rebuild `files` without asking the server again.
+  const allFilesRef = useRef<DiffFile[]>([]);
+  /** The published subset, so the toggle can preserve the active file by path. */
+  const visibleFilesRef = useRef<DiffFile[]>([]);
+  const [showGeneratedFiles, setShowGeneratedFiles] = useState(false);
+  const showGeneratedFilesRef = useRef(showGeneratedFiles);
+  showGeneratedFilesRef.current = showGeneratedFiles;
   const [activeFileIndex, setActiveFileIndex] = useState(0);
+  const activeFileIndexRef = useRef(activeFileIndex);
+  activeFileIndexRef.current = activeFileIndex;
   const [annotations, setAnnotations] = useState<CodeAnnotation[]>([]);
   const annotationsRef = useRef(annotations);
   annotationsRef.current = annotations;
@@ -531,10 +544,13 @@ const ReviewApp: React.FC = () => {
   viewedFilesRef.current = viewedFiles;
   const [hideViewedFiles, setHideViewedFiles] = useState(false);
   // Generated-files sidecar (#1317): repo-relative paths marked
-  // `linguist-generated` in `.gitattributes`. Their diffs seed collapsed on
-  // the all-files surface (GitHub-style) and their headers carry a
-  // "generated" tag. Presentation-only — the diff data is never filtered.
+  // `linguist-generated` in `.gitattributes`. These files leave the review
+  // entirely — see publishFiles below — so the reviewer reads source code. The
+  // "Showing source only" control in the diff header brings them back, and
+  // their headers then carry a "generated" tag and seed collapsed.
   const [generatedFiles, setGeneratedFiles] = useState<Set<string>>(new Set());
+  const generatedFilesRef = useRef(generatedFiles);
+  generatedFilesRef.current = generatedFiles;
   // Generated files the user explicitly expanded — session-local so an
   // expansion survives re-renders, dock panel remounts, and identity
   // re-seeds until the page reloads.
@@ -548,6 +564,39 @@ const ReviewApp: React.FC = () => {
       else next.delete(filePath);
       return next;
     });
+  }, []);
+  /**
+   * Record the full changed-file set and publish the subset the reviewer sees.
+   * Returns that subset, because callers preserve the active file by looking
+   * its path up in the list they just published.
+   *
+   * Pass `generated` when the same payload carried a fresh sidecar; otherwise
+   * the current set applies.
+   */
+  const publishFiles = useCallback((next: DiffFile[], generated?: Set<string>): DiffFile[] => {
+    allFilesRef.current = next;
+    const hidden = generated ?? generatedFilesRef.current;
+    const visible = showGeneratedFilesRef.current || hidden.size === 0
+      ? next
+      : next.filter(file => !hidden.has(file.path));
+    visibleFilesRef.current = visible;
+    setFiles(visible);
+    return visible;
+  }, []);
+  /** Show or hide generated files, keeping the reviewer on the same file. */
+  const handleToggleGeneratedFiles = useCallback(() => {
+    const nextShow = !showGeneratedFilesRef.current;
+    showGeneratedFilesRef.current = nextShow;
+    const currentPath = visibleFilesRef.current[activeFileIndexRef.current]?.path;
+    const hidden = generatedFilesRef.current;
+    const visible = nextShow || hidden.size === 0
+      ? allFilesRef.current
+      : allFilesRef.current.filter(file => !hidden.has(file.path));
+    visibleFilesRef.current = visible;
+    const preserved = currentPath ? visible.findIndex(file => file.path === currentPath) : -1;
+    setShowGeneratedFiles(nextShow);
+    setFiles(visible);
+    setActiveFileIndex(preserved >= 0 ? preserved : 0);
   }, []);
   const [origin, setOrigin] = useState<Origin | null>(null);
   // Unknown until /api/diff responds. Keeping this tri-state prevents provider
@@ -2028,7 +2077,7 @@ const ReviewApp: React.FC = () => {
           semanticDiff: data.semanticDiff,
           callFlow: data.callFlow,
         });
-        setFiles(apiFiles);
+        publishFiles(apiFiles, new Set(data.generatedFiles ?? []));
         setReviewMode(data.mode ?? null);
         setWorkspaceDiffOptions(data.mode === 'workspace' ? (data.diffOptions ?? []) : null);
         if (data.origin) setOrigin(data.origin);
@@ -2103,7 +2152,7 @@ const ReviewApp: React.FC = () => {
           rawPatch: DEMO_DIFF,
           gitRef: 'demo',
         });
-        setFiles(demoFiles);
+        publishFiles(demoFiles, new Set());
         setWorkspaceDiffOptions(null);
         setSemanticDiffAvailable(false);
         setCallFlowAdvert({
@@ -2655,12 +2704,12 @@ const ReviewApp: React.FC = () => {
     dockApi?.getPanel(REVIEW_DIFF_PANEL_ID)?.api.close();
     needsInitialDiffPanel.current = true;
     setDiffData(prev => prev ? { ...prev, rawPatch: data.rawPatch, gitRef: data.gitRef, aiReviewContext: data.aiReviewContext } : prev);
-    setFiles(nextFiles);
+    const visibleFiles = publishFiles(nextFiles);
     if (isPRSwitch) {
       setActiveFileIndex(0);
     } else {
       const currentFile = files[activeFileIndex];
-      const preserved = currentFile ? nextFiles.findIndex(f => f.path === currentFile.path) : -1;
+      const preserved = currentFile ? visibleFiles.findIndex(f => f.path === currentFile.path) : -1;
       setActiveFileIndex(preserved >= 0 ? preserved : 0);
     }
     clearPendingSelection();
@@ -2813,7 +2862,8 @@ const ReviewApp: React.FC = () => {
       applyCallFlowAdvert(data.callFlow);
       setSections(data.sections ?? null);
       setCommitInfo(data.commitInfo ?? null);
-      setGeneratedFiles(new Set(data.generatedFiles ?? []));
+      const nextGenerated = new Set(data.generatedFiles ?? []);
+      setGeneratedFiles(nextGenerated);
       setBaseBehindRemote(data.baseBehindRemote === true);
 
       if (options?.preserveFile) {
@@ -2831,14 +2881,14 @@ const ReviewApp: React.FC = () => {
           setSelectedBase(data.base);
           setCommittedBase(data.base);
         }
-        setFiles(nextFiles);
+        const visibleFiles = publishFiles(nextFiles, nextGenerated);
         const currentPath = files[activeFileIndex]?.path;
-        const nextIdx = currentPath ? nextFiles.findIndex(f => f.path === currentPath) : -1;
+        const nextIdx = currentPath ? visibleFiles.findIndex(f => f.path === currentPath) : -1;
         if (nextIdx !== -1) {
           setActiveFileIndex(nextIdx);
-        } else if (nextFiles.length > 0) {
+        } else if (visibleFiles.length > 0) {
           setActiveFileIndex(0);
-          openDiffFile(nextFiles[0].path);
+          openDiffFile(visibleFiles[0].path);
         }
         // Line numbers can shift when whitespace handling changes, so a
         // selection anchored to the old patch is stale — clear it (the
@@ -2851,7 +2901,7 @@ const ReviewApp: React.FC = () => {
         dockApi?.getPanel(REVIEW_DIFF_PANEL_ID)?.api.close();
         needsInitialDiffPanel.current = true;
         setDiffData(prev => prev ? { ...prev, rawPatch: data.rawPatch, gitRef: data.gitRef, diffType: data.diffType, aiReviewContext: data.aiReviewContext } : prev);
-        setFiles(nextFiles);
+        publishFiles(nextFiles, nextGenerated);
         setDiffType(data.diffType);
         if (data.diffOptions) setWorkspaceDiffOptions(data.diffOptions);
         if (data.base) {
@@ -4982,6 +5032,9 @@ const ReviewApp: React.FC = () => {
                 showCommitsOption={commitsCapable}
                 onSelectAllFiles={() => completeNavigatorSelection(openAllFilesPanel)}
                 isAllFilesActive={isAllFilesActive}
+                generatedFileCount={generatedFiles.size}
+                showGeneratedFiles={showGeneratedFiles}
+                onToggleGeneratedFiles={handleToggleGeneratedFiles}
                 onSelectSemanticDiff={() => completeNavigatorSelection(openSemanticDiffPanel)}
                 isSemanticDiffActive={isSemanticDiffActive}
                 semanticDiffAvailable={semanticDiffUsable}
@@ -5061,6 +5114,9 @@ const ReviewApp: React.FC = () => {
                 callFlowError={callFlowNavError}
                 onSelectAllFiles={() => completeNavigatorSelection(openAllFilesPanel)}
                 isAllFilesActive={isAllFilesActive}
+                generatedFileCount={generatedFiles.size}
+                showGeneratedFiles={showGeneratedFiles}
+                onToggleGeneratedFiles={handleToggleGeneratedFiles}
                 scrollHighlightIndex={isAllFilesActive && allFilesVisibleFile ? files.findIndex(f => f.path === allFilesVisibleFile) : undefined}
                 onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
                 onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}

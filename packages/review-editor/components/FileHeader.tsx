@@ -3,6 +3,7 @@ import { SemanticFileBadge } from './SemanticFileBadge';
 import { CallFlowFileBadge } from './CallFlowFileBadge';
 import { OpenInAppButton } from '@plannotator/ui/components/OpenInAppButton';
 import { useReviewStateOptional } from '../dock/ReviewStateContext';
+import { countSourceLines, languageForPath } from '@plannotator/shared/source-lines';
 import type { DiffFileStatus } from '../types';
 
 interface FileHeaderProps {
@@ -99,15 +100,14 @@ const FileStatusLetter: React.FC<{ status: DiffFileStatus; oldPath?: string }> =
   );
 };
 
-/** Count +/- lines in a unified patch (ignores the +++/--- file headers). */
-function countChanges(patch: string): { additions: number; deletions: number } {
-  let additions = 0;
-  let deletions = 0;
-  for (const line of patch.split('\n')) {
-    if (line[0] === '+' && !line.startsWith('+++')) additions++;
-    else if (line[0] === '-' && !line.startsWith('---')) deletions++;
-  }
-  return { additions, deletions };
+/**
+ * Source lines this file's patch adds and removes — comments and blank lines
+ * excluded, so the header reports the work a reviewer must read. The rule lives
+ * in `@plannotator/shared/source-lines`, shared with the tree totals and the
+ * server's agent-job stats.
+ */
+function countChanges(patch: string, filePath: string): { additions: number; deletions: number } {
+  return countSourceLines(patch.split('\n'), languageForPath(filePath));
 }
 
 /** Sticky file header with file path, Viewed toggle, Git Add, and Copy Diff button */
@@ -167,7 +167,10 @@ export const FileHeader: React.FC<FileHeaderProps> = ({
   const stageLabel = isVeryTight ? '' : isCompact ? (isStaging ? 'Adding' : isStaged ? 'Added' : 'Add') : (isStaging ? 'Adding...' : isStaged ? 'Added' : 'Git Add');
   const commentLabel = isVeryTight ? '' : 'Comment';
   const viewedLabel = isVeryTight ? '' : 'Viewed';
-  const { additions, deletions } = React.useMemo(() => countChanges(patch), [patch]);
+  const { additions, deletions } = React.useMemo(
+    () => countChanges(patch, filePath),
+    [patch, filePath],
+  );
 
   return (
     <div

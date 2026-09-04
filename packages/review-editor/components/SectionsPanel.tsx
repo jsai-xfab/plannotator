@@ -9,6 +9,7 @@ import type {
 import { BaseBranchPicker } from './BaseBranchPicker';
 import { PanelViewToggle } from './PanelViewToggle';
 import { SemanticDiffRow, CallFlowRow, AllFilesRow } from './PanelNavRows';
+import { GeneratedFilesRow } from './GeneratedFilesRow';
 import { PanelControlsRow, PanelSearchField } from './PanelChrome';
 import {
   ViewedControl,
@@ -89,6 +90,12 @@ interface SectionsPanelProps {
   /** All files nav row — the review's landing view, listed first. */
   onSelectAllFiles?: () => void;
   isAllFilesActive?: boolean;
+  /** Generated files in the current diff. Drives the generated-files row. */
+  generatedFileCount?: number;
+  /** True when generated files are currently in `files`. */
+  showGeneratedFiles?: boolean;
+  /** Omit to hide the generated-files row entirely. */
+  onToggleGeneratedFiles?: () => void;
   /** Semantic diff nav row (same as tree view). */
   onSelectSemanticDiff?: () => void;
   isSemanticDiffActive?: boolean;
@@ -197,7 +204,7 @@ const SectionRow: React.FC<{
         <TruncatedPath path={file.path} />
         <AnnotationBadge count={annotationCount} />
       </div>
-      <DiffCounts additions={file.additions} deletions={file.deletions} />
+      <DiffCounts additions={file.sourceAdditions} deletions={file.sourceDeletions} />
     </button>
   );
 };
@@ -237,6 +244,9 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
   showCommitsOption,
   onSelectAllFiles,
   isAllFilesActive,
+  generatedFileCount,
+  showGeneratedFiles,
+  onToggleGeneratedFiles,
   onSelectSemanticDiff,
   isSemanticDiffActive,
   semanticDiffAvailable,
@@ -436,8 +446,10 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
     });
   }, []);
 
-  const totalAdditions = files.reduce((sum, f) => sum + f.additions, 0);
-  const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
+  // Source lines, not raw git lines: the total should describe the work a
+  // reviewer must read. See @plannotator/shared/source-lines.
+  const totalAdditions = files.reduce((sum, f) => sum + f.sourceAdditions, 0);
+  const totalDeletions = files.reduce((sum, f) => sum + f.sourceDeletions, 0);
 
   const renderRows = (list: SectionItem[]) =>
     list.map((item) => (
@@ -593,6 +605,13 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
                 onClick={onSelectAllFiles}
                 additions={totalAdditions}
                 deletions={totalDeletions}
+              />
+            )}
+            {onToggleGeneratedFiles && (
+              <GeneratedFilesRow
+                hiddenCount={generatedFileCount ?? 0}
+                showing={showGeneratedFiles === true}
+                onToggle={onToggleGeneratedFiles}
               />
             )}
             {panelControls}

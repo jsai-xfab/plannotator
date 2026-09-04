@@ -23,6 +23,7 @@ import { GitHubIcon } from '@plannotator/ui/components/GitHubIcon';
 import { Paperclip } from 'lucide-react';
 
 import { SidebarActionRow, SemanticDiffRow, CallFlowRow, AllFilesRow } from './PanelNavRows';
+import { GeneratedFilesRow } from './GeneratedFilesRow';
 import { PanelControlsRow, PanelSearchField } from './PanelChrome';
 
 interface FileTreeProps {
@@ -104,6 +105,12 @@ interface FileTreeProps {
   callFlowError?: boolean;
   onSelectAllFiles?: () => void;
   isAllFilesActive?: boolean;
+  /** Generated files in the current diff. Drives the generated-files row. */
+  generatedFileCount?: number;
+  /** True when generated files are currently in `files`. */
+  showGeneratedFiles?: boolean;
+  /** Omit to hide the generated-files row entirely (e.g. a non-git surface). */
+  onToggleGeneratedFiles?: () => void;
   scrollHighlightIndex?: number;
   /** Absolute repo root for the "Copy full path" context menu item. Null/undefined hides the option (e.g. PR review mode). */
   repoRoot?: string | null;
@@ -193,6 +200,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
   callFlowError,
   onSelectAllFiles,
   isAllFilesActive = false,
+  generatedFileCount,
+  showGeneratedFiles,
+  onToggleGeneratedFiles,
   scrollHighlightIndex,
   repoRoot,
   panelView = 'tree',
@@ -528,8 +538,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <AllFilesRow
               active={isAllFilesActive}
               onClick={onSelectAllFiles}
-              additions={files.reduce((sum, file) => sum + file.additions, 0)}
-              deletions={files.reduce((sum, file) => sum + file.deletions, 0)}
+              // Source lines, not raw git lines: the total should describe the
+              // work a reviewer must read. See @plannotator/shared/source-lines.
+              additions={files.reduce((sum, file) => sum + file.sourceAdditions, 0)}
+              deletions={files.reduce((sum, file) => sum + file.sourceDeletions, 0)}
+            />
+          )}
+          {onToggleGeneratedFiles && (
+            <GeneratedFilesRow
+              hiddenCount={generatedFileCount ?? 0}
+              showing={showGeneratedFiles === true}
+              onToggle={onToggleGeneratedFiles}
             />
           )}
           {panelControls}
