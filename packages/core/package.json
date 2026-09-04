@@ -8,6 +8,7 @@
     "./diff-files": "./diff-files.ts",
     "./source-lines": "./source-lines.ts",
     "./thread-resolution": "./thread-resolution.ts",
+    "./since-review": "./since-review.ts",
     "./guide": "./guide.ts",
     "./guide-format": "./guide-format.ts",
     "./annotatable": "./annotatable.ts",

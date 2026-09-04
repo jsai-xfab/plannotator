@@ -24,6 +24,7 @@ import {
   detectRemoteDefaultInfo,
   isBinaryPatchFile,
   listPatchFiles,
+  type PatchFileStats,
   type RemoteDefaultInfo,
   type SinceBaseSections,
 } from "@plannotator/shared/review-core";
@@ -89,6 +90,7 @@ import { createTourSession, TOUR_EMPTY_OUTPUT_ERROR } from "./tour/tour-review";
 import { createGuideSession, GUIDE_EMPTY_OUTPUT_ERROR } from "./guide/guide-review";
 import { GuideShareError, shareGuide, unshareBeforeDelete, unshareGuide } from "./guide/guide-share";
 import { createGuideStoreSession, SAVED_GUIDE_ID_PREFIX, updateGuideShare } from "@plannotator/shared/guide-store";
+import { resolveRoundRepoKey, saveRound } from "@plannotator/shared/round-store";
 import { resolveGuideShareUrl, resolveSharingEnabled } from "@plannotator/shared/config";
 import {
   buildGuideSnapshot,
@@ -919,6 +921,71 @@ export async function startReviewServer(
    * content to lose; false only when a durable write was expected and failed,
    * in which case the caller keeps the draft as the recovery copy.
    */
+  /**
+   * Record the files the reviewer just read, keyed by git blob id.
+   *
+   * The `since-review` view compares this against the working tree later, so
+   * the reviewer reads only the agent's edits. Blob ids, not line numbers:
+   * lines move, bytes do not, and an unchanged id needs no reading at all.
+   *
+   * Best-effort throughout. A repository this cannot read (no git, a detached
+   * state, a jj or Perforce workspace) simply records no round, and the next
+   * review opens on the full change exactly as it does today. Losing the
+   * since-review view must never cost the reviewer their feedback.
+   */
+  const recordReviewRound = async (annotations: unknown): Promise<void> => {
+    try {
+      // Same cwd resolution the guide store session uses, so both stores key
+      // off one repository even in a worktree or a jj colocated checkout.
+      const cwd = gitContext
+        ? resolveVcsCwd(currentDiffType as DiffType, gitContext.cwd) ?? gitContext.cwd ?? process.cwd()
+        : undefined;
+      if (!cwd) return;
+      // `ls-files -s` names the blob git holds for every tracked path — the
+      // same ids `since-review` compares against later.
+      const listed = await gitRuntime.runGit(["ls-files", "-s"], { cwd });
+      if (listed.exitCode !== 0) return;
+      const files = listed.stdout
+        .split("\n")
+        .map((line) => {
+          // "<mode> <object> <stage>\t<path>"
+          const [meta, path] = line.split("\t");
+          const objectId = meta?.split(" ")[1];
+          return objectId && path ? { path, objectId } : null;
+        })
+        .filter((entry): entry is { path: string; objectId: string } => entry !== null);
+      if (files.length === 0) return;
+
+      const base = currentBase;
+      let baseCommit: string | undefined;
+      if (base) {
+        const mergeBase = await gitRuntime.runGit(["merge-base", base, "HEAD"], { cwd });
+        if (mergeBase.exitCode === 0) baseCommit = mergeBase.stdout.trim() || undefined;
+      }
+      const remote = await gitRuntime.runGit(["remote", "get-url", "origin"], { cwd });
+      const repoKey = resolveRoundRepoKey({
+        cwd,
+        remoteUrl: remote.exitCode === 0 ? remote.stdout.trim() : null,
+        prUrl: prMetadata?.url ?? null,
+      });
+      saveRound(repoKey, {
+        version: 1,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: Date.now(),
+        diffContext: { mode: currentDiffType as string, ...(base ? { base } : {}) },
+        ...(baseCommit ? { baseCommit } : {}),
+        files,
+        annotationIds: Array.isArray(annotations)
+          ? annotations
+              .map((a) => (a && typeof a === "object" ? (a as { id?: unknown }).id : null))
+              .filter((id): id is string => typeof id === "string")
+          : [],
+      });
+    } catch (e) {
+      console.error(`[round-store] Failed to record review round: ${e}`);
+    }
+  };
+
   const archiveReviewSubmission = (
     feedback: unknown,
     annotations: unknown,
@@ -1291,9 +1358,21 @@ export async function startReviewServer(
                         ? raw.split(" => ").pop()!
                         : raw;
                     // Binary files report "-\t-\tpath" — count as 0/0.
-                    return { path, additions: Number(a) || 0, deletions: Number(d) || 0 };
+                    const additions = Number(a) || 0;
+                    const deletions = Number(d) || 0;
+                    // numstat reports totals, not line content, so the
+                    // source-line rule cannot run here. The guide plans against
+                    // this list by PATH; the counts only order it, and raw
+                    // counts never under-report a file's size.
+                    return {
+                      path,
+                      additions,
+                      deletions,
+                      sourceAdditions: additions,
+                      sourceDeletions: deletions,
+                    };
                   })
-                  .filter((f): f is { path: string; additions: number; deletions: number } => f !== null);
+                  .filter((f): f is PatchFileStats => f !== null);
                 if (recomputed.length > 0) changedFiles = recomputed;
               }
             } catch {
@@ -3453,6 +3532,12 @@ export async function startReviewServer(
                 approved ? (hasContent ? "approved-with-notes" : "lgtm") : "feedback",
               );
               if (durable) deleteDraft(draftKey, readDraftGenerationFromBody(body));
+              // Record what the reviewer just read, so the next pass can show
+              // only what the agent changed. Written on SEND, not on the
+              // agent's completion: the round describes the reviewer's view,
+              // and the agent's edits are the thing it will be measured
+              // against. Best-effort — never fail a send over bookkeeping.
+              await recordReviewRound(annotationsValue);
               resolveDecision({
                 approved,
                 feedback: feedbackValue,
