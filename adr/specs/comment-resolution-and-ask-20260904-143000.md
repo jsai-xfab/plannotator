@@ -54,12 +54,25 @@ Feedback payload, because the agent already did that work.
 
 ## Part 2 — The comment kind
 
-The agent must know whether a comment asks for a change or asks a question. Add
-`question` to the annotation types beside the existing `comment`, `suggestion`,
-and `concern` in `packages/core/external-annotation.ts`.
+The agent must know whether a comment asks for a change or asks a question. The
+agent decides this. The reviewer writes a comment and picks nothing.
 
-The reviewer picks the kind when writing the comment. The agent does not guess,
-because a wrong guess edits code the reviewer only asked about.
+Decided 2026-09-04. The reviewer chose classification by the agent over a new
+`question` annotation type. A type the reviewer must pick adds a step to every
+comment, and most comments are obvious.
+
+A wrong guess is the cost. Three rules contain it.
+
+1. **The agent states its reading.** Every reply opens by naming what the agent
+   took the comment to be, and what it did. A misread is then visible in the
+   thread, not silent.
+2. **A question thread never resolves itself.** The agent resolves a thread only
+   when it edited a file. See Part 3.
+3. **Every edit is reviewable.** The round written after the job shows exactly what
+   changed. See `adr/specs/review-rounds-20260904-143000.md`.
+
+An edit made from a misread comment is therefore visible twice, and it is
+revertible. An unanswered question is visible in an open thread.
 
 ## Part 3 — Two agent jobs
 
@@ -79,8 +92,12 @@ provider, launched for one thread instead of a batch.
 
 ### The `apply` job
 
-Input: every unresolved thread that is not a question, plus the diff context.
+Input: every unresolved thread, plus the diff context.
 Output: file edits, plus one reply per thread naming what it changed.
+
+The job classifies each thread first. A thread it reads as a question gets an
+answer and no edit, exactly as the `answer` job would produce. A thread it reads
+as a change request gets an edit.
 
 The job marks a thread resolved with `resolvedBy: "agent"` only when it made the
 change. When the job cannot make a change, it replies with the reason and leaves
@@ -92,11 +109,12 @@ agent's edits. See `adr/specs/review-rounds-20260904-143000.md`.
 
 ## The flow
 
-1. The reviewer comments. Some comments are questions.
-2. The reviewer clicks `Ask` on a question and reads the answer immediately, or
-   sends the batch.
-3. The agent answers every question thread and edits for every other thread.
-4. The agent resolves what it changed. Question threads stay open.
+1. The reviewer comments. The reviewer picks no kind.
+2. The reviewer clicks `Ask` on any thread to read an answer immediately, or sends
+   the batch.
+3. The agent reads each thread. It answers the ones it reads as questions. It edits
+   for the rest.
+4. The agent resolves only the threads it edited for. Every other thread stays open.
 5. The reviewer reads the answers, resolves them, and opens the since-review diff.
 
 ## Test first
@@ -116,6 +134,15 @@ root and no file changed on disk.
 run the job, and assert the file changed, one reply landed, and the root is
 resolved with `resolvedBy: "agent"`.
 
+**Integration — classification.** Post one question thread and one change request
+in the same batch. Run the `apply` job. Assert the question thread stays open with
+a reply, and the change thread resolves with a file edit. Assert both replies name
+how the agent read the comment.
+
+**Integration — document edits.** Post a change request against a fixture markdown
+file. Run the `apply` job. Assert the file changed on disk, and assert a round was
+written so the reviewer can diff it.
+
 **Manual — Playwright checklist.**
 
 1. Write a question comment. Click `Ask`. An answer appears in the thread.
@@ -124,9 +151,17 @@ resolved with `resolvedBy: "agent"`.
    itself.
 4. Reopen a resolved thread. It returns to the payload.
 
-## Open questions
+## Decided
 
-1. **Which agent runs the job.** Plannotator supports many agents. Decide whether
-   `answer` and `apply` use the review agent, or the reviewer's own session.
-2. **Document edits.** For a markdown review the `apply` job edits prose. Decide
-   whether it edits the file directly or proposes a diff the reviewer accepts.
+**Document edits.** For a markdown review the `apply` job edits the file directly.
+It does not propose a change for the reviewer to accept.
+
+Decided 2026-09-04. This matches how the replaced document tool already works. The
+round written after the job is the safety net: the reviewer reads the edit as a
+diff instead of clicking through proposals. See
+`adr/specs/review-rounds-20260904-143000.md`.
+
+## Open question
+
+**Which agent runs the job.** Plannotator supports many agents. Decide whether
+`answer` and `apply` use the review agent, or the reviewer's own session.
