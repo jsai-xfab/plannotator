@@ -393,6 +393,8 @@ describe("review-core", () => {
       path: "large build.bin",
       additions: 0,
       deletions: 0,
+      sourceAdditions: 0,
+      sourceDeletions: 0,
     });
     expect(isBinaryPatchFile(result.patch, "large build.bin")).toBe(true);
     // Marked so the UI can say WHY the card is empty. A genuine binary file

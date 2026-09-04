@@ -8,6 +8,7 @@
  */
 
 import { parseDiffFilePathLines, parseDiffGitHeader, parseDiffMetadataPathLines } from "./diff-paths";
+import { countSourceLines, languageForPath } from "./source-lines";
 
 /**
  * Change type derived from the diff's metadata lines. 'modified' is the
@@ -21,8 +22,16 @@ export interface DiffFile {
   path: string;
   oldPath?: string;
   patch: string;
+  /** Every changed line, as git counts them. Staging and parity with git use these. */
   additions: number;
   deletions: number;
+  /**
+   * Changed lines that are source code — comments and blank lines excluded.
+   * Equal to `additions`/`deletions` for a language with no rule yet. See
+   * `source-lines.ts`.
+   */
+  sourceAdditions: number;
+  sourceDeletions: number;
   status: DiffFileStatus;
 }
 
@@ -71,12 +80,16 @@ export function parseDiffToFiles(rawPatch: string): DiffFile[] {
       if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
     }
 
+    const source = countSourceLines(lines, languageForPath(newPath));
+
     files.push({
       path: newPath,
       oldPath: oldPath !== newPath ? oldPath : undefined,
       patch: chunk,
       additions,
       deletions,
+      sourceAdditions: source.additions,
+      sourceDeletions: source.deletions,
       status: deriveStatus(lines, oldPath, newPath),
     });
   }

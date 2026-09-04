@@ -8,6 +8,7 @@
     "./compress": "./compress.ts",
     "./crypto": "./crypto.ts",
     "./diff-paths": "./diff-paths.ts",
+    "./source-lines": "./source-lines.ts",
     "./feedback-templates": "./feedback-templates.ts",
     "./jj-core": "./jj-core.ts",
     "./gitbutler-core": "./gitbutler-core.ts",

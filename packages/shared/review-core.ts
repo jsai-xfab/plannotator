@@ -15,6 +15,7 @@ import {
   parseDiffMetadataPathLines,
   OVERSIZED_REVIEW_STUB_MARKER,
 } from "./diff-paths";
+import { countSourceLines, languageForPath } from "./source-lines";
 
 export const JJ_TRUNK_REVSET = "trunk()";
 /** Maximum regular-file payload accepted for Git diff expansion. */
@@ -2371,23 +2372,31 @@ export function isP4DiffType(diffType: string): boolean {
   return parseP4DiffType(diffType) !== null;
 }
 
+/** Per-file line counts for one file of a patch. */
+export interface PatchFileStats {
+  path: string;
+  /** Every changed line, as git counts them. */
+  additions: number;
+  deletions: number;
+  /** Changed lines that are source code. See `@plannotator/core/source-lines`. */
+  sourceAdditions: number;
+  sourceDeletions: number;
+}
+
 /**
  * Extract per-file path + line-count stats from a raw unified diff patch.
- * Mirrors the client's packages/review-editor/utils/diffParser.ts chunk-split
- * and additions/deletions counting logic, but only needs path/additions/
- * deletions (no status/oldPath) — used server-side to give agent-job
- * providers (e.g. Guided Review) the authoritative changed-file set to plan
- * against, without duplicating the VCS-agnostic diff-splitting logic.
+ * Repeats the client's chunk-split (`@plannotator/core/diff-files`) because
+ * this side needs no status or oldPath, but shares the counting rule with it
+ * through `countSourceLines` — server-side it gives agent-job providers (e.g.
+ * Guided Review) the authoritative changed-file set to plan against.
  */
-export function listPatchFiles(
-  patch: string,
-): { path: string; additions: number; deletions: number }[] {
+export function listPatchFiles(patch: string): PatchFileStats[] {
   if (!patch) return [];
 
   const chunkStarts = [...patch.matchAll(/^diff --git /gm)];
   if (chunkStarts.length === 0) return [];
 
-  const files: { path: string; additions: number; deletions: number }[] = [];
+  const files: PatchFileStats[] = [];
 
   for (let i = 0; i < chunkStarts.length; i++) {
     const start = chunkStarts[i].index ?? 0;
@@ -2409,7 +2418,15 @@ export function listPatchFiles(
       else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
     }
 
-    files.push({ path, additions, deletions });
+    const source = countSourceLines(lines, languageForPath(path));
+
+    files.push({
+      path,
+      additions,
+      deletions,
+      sourceAdditions: source.additions,
+      sourceDeletions: source.deletions,
+    });
   }
 
   return files;
