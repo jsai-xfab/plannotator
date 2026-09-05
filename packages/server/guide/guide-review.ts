@@ -187,7 +187,10 @@ never shares a chapter.
 #### Section fields
 - **title**: Concept-level, e.g. "Payment localization module". NEVER a
   filename paraphrase like "Changes to payments/locale.ts".
-- **overview**: Markdown, 2-6 sentences. Three jobs, in order:
+- **overview**: Markdown, 2-6 sentences of prose, PLUS a diagram whenever the
+  section is about structure or sequence (see "Diagrams" below — a diagram does
+  not count against the sentence budget, and is expected on structural
+  sections rather than being an optional flourish). Three jobs, in order:
   1. What changed here, concretely.
   2. Why it exists: the motivation, and non-obvious decisions ("we did X
      instead of Y because Z" is exactly what a reviewer needs and cannot
@@ -214,6 +217,41 @@ never shares a chapter.
   - A tiny fenced code block (2-5 lines) only when code says it better
     than a sentence, e.g. a new API shape. Never paste diff hunks; the
     diffs render next to the overview already.
+  - A markdown table when the section compares 3+ parallel things (before
+    and after across several call sites, a set of flags and their effects).
+
+#### Diagrams
+
+A fenced \`\`\`mermaid block inside an overview renders as a picture. Include one
+in every section that introduces or reshapes any of the following — for these a
+picture is the clearest form available, and prose alone under-serves the reader:
+
+- a call or data path crossing two or more functions, classes, modules or
+  services — use \`sequenceDiagram\`;
+- a type relationship: a new interface and its implementers, a field moving
+  between types, a new collaborator — use \`classDiagram\`;
+- a lifecycle, retry, or error path with more than one branch — use
+  \`stateDiagram-v2\` or \`flowchart\`.
+
+Skip it for a rename, an import bump, a config change, or anything one sentence
+settles. One diagram per section at most.
+
+Every node and edge must use real names from the diff — real functions, real
+types, real modules — and describe only what the changeset and the files you
+have read actually show. A diagram with invented names is worse than none,
+because the reader cannot check it against the code. Keep it to roughly 3-8
+nodes; a diagram that needs scrolling has stopped being a summary.
+
+\`\`\`mermaid
+sequenceDiagram
+  participant Discriminator
+  participant MethodPlan
+  participant Aggregator
+  Discriminator->>MethodPlan: methods (ordered tuple)
+  MethodPlan->>Aggregator: run all at once
+  Aggregator-->>Discriminator: first claim per identity
+\`\`\`
+
 - **diffs**: one or more file references. Each has two fields:
   - **file**: the EXACT repo-relative path as it appears in the diff (or in
     the Changed files list, if provided). Copy it, never invent it, never
