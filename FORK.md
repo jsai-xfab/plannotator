@@ -29,6 +29,18 @@ Everything below serves one of those two problems.
 | 6 | **Review rounds.** Sending feedback records the files under review by git blob id, so a later pass can show only what the agent changed. **No UI yet** — the record is written, the view is not built. | `packages/shared/round-store.ts`, `packages/core/since-review.ts` |
 | 7 | **Guided Review plans against source only.** Generated files are no longer sent to the guide agent, so no chapter is spent on a lockfile. | `packages/server/review.ts` |
 | 8 | **The review skill teaches the loop.** Classify each thread, say how you read it, edit for a change request, answer a question without touching files, resolve only what you changed. | `apps/skills/core/plannotator-review/SKILL.md` |
+| 9 | **Code Tour stops render diagrams.** A stop's detail goes through the full markdown renderer, so a ```mermaid fence renders as a picture — plus code blocks and tables. The tour prompt asks for a diagram when a stop is about structure or sequence, drawn from real names in the diff. | `packages/ui/components/RenderedMarkdown.tsx`, `TourStopCard.tsx`, `packages/server/tour/tour-review.ts` |
+
+### The cost of row 9
+
+The code review bundle grew **17.63 MB → 21.90 MB (+24%,** gzip 5.6 → 6.9 MB) because
+Mermaid is now inlined into it. Upstream deliberately keeps Mermaid out of that
+bundle, and `tests/entry-assets.test.ts` guards it; this fork changes that
+expectation on purpose.
+
+The trade is acceptable only because the bundle is served from localhost. It
+would not be on a hosted page. Revert the dispatch in `RenderedMarkdown` and the
+marker expectation together if the tour stops drawing.
 
 ## Upstream — not ours, do not claim it
 
@@ -55,7 +67,10 @@ These arrived with plannotator. Several are easy to mistake for our work.
 - **Rounds have no view.** Round 6 records data nothing reads yet.
 - **Markdown review records no rounds.** Only code review does; `packages/server/annotate.ts` is untouched.
 - **Only Python has a comment rule.** Every other language counts every changed line.
-- **Neither walkthrough draws anything.** `renderMarkdownProse` renders paragraphs, headings, bullets and callouts — no code blocks, tables, or mermaid. That one file is what caps both Guided Review and Code Tour at short prose.
+- **Guided Review still draws nothing.** Only Code Tour got the full renderer. `guide-viewer` depends on `core` alone — it is the portable renderer shipped to guides.show — so it cannot pull in `@plannotator/ui`. Giving guides diagrams means a `core`-only markdown renderer, or accepting that dependency.
+- **Diagrams are likely, not guaranteed.** The tour prompt asks for one when a stop is about structure or sequence, and the model still decides. Observed: one diagram in one run, none in the next on the same small changeset.
+- **Tour anchors still land on the file, not the line.** `TourDiffAnchor` carries `line` and `end_line`, and `onAnchorClick` passes only `anchor.file`. There is no line-reveal primitive — the guide reveal channel is `{ path, token }` — so this needs new plumbing.
+- **Code Tour is still a modal.** It should be a center dock panel, beside the diff rather than covering it.
 
 ## Working on this fork
 

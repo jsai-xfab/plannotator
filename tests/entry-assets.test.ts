@@ -134,6 +134,15 @@ describe('review entry assets', () => {
   //   registration marker count drops to zero while the presence markers stay.
   //   The review bundle must NOT carry the Mermaid marker: it never renders a
   //   Mermaid block and main's review bundle has no Mermaid in it.
+  //
+  //   THIS FORK DIVERGES. A Code Tour stop may carry a ```mermaid fence — a
+  //   call path or a class relationship is far cheaper to read as a picture —
+  //   so RenderedMarkdown dispatches diagrams and the review bundle now
+  //   inlines Mermaid. Measured cost: 17.63 MB → 21.90 MB (+24%, gzip 5.6 →
+  //   6.9 MB). It is paid on a bundle served from localhost, which is why the
+  //   trade is acceptable here and would not be on a hosted page. Revert this
+  //   expectation together with the dispatch in RenderedMarkdown if the tour
+  //   ever stops drawing. See FORK.md.
   // - Presence markers (a KaTeX class name, a Mermaid diagram id, an
   //   Emscripten symbol from Graphviz, the bridge global), which only say the
   //   runtime is still inlined by inlineDynamicImports. KaTeX is inlined
@@ -145,7 +154,11 @@ describe('review entry assets', () => {
   const REGISTRATION_MARKERS = ['plannotator-math-eager', 'uniqueUsernameGenerator'];
   const markerExpectations: Array<[bundle: string, present: string[], absent: string[]]> = [
     ['apps/hook/dist/index.html', [...REGISTRATION_MARKERS, 'plannotator-mermaid-eager', 'katex-display', 'flowchart-v2', 'viz_set_y_invert', '__plannotatorLiveConfig'], []],
-    ['apps/review/dist/index.html', [...REGISTRATION_MARKERS, 'katex-display', '__plannotatorLiveConfig'], ['plannotator-mermaid-eager', 'flowchart-v2']],
+    // 'flowchart-v2' (the Mermaid runtime) is now EXPECTED here — see the fork
+    // note above. 'plannotator-mermaid-eager' stays absent: the review app
+    // renders diagrams through RenderedMarkdown's dispatch, and does not
+    // register the eager slot the plan editor uses.
+    ['apps/review/dist/index.html', [...REGISTRATION_MARKERS, 'katex-display', '__plannotatorLiveConfig', 'flowchart-v2'], ['plannotator-mermaid-eager']],
   ];
   for (const [path, present, absent] of markerExpectations) {
     test.skipIf(!existsSync(resolve(root, path)))(`${path} carries the eager registration and renderer markers`, () => {

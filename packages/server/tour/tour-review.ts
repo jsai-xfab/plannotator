@@ -204,6 +204,51 @@ that's two stops. Never "one-stop-per-file" by default; let logic decide.
   - Use - bullet points for multi-part changes or parallel considerations.
   - Keep total length reasonable, around 3-6 sentences equivalent. Don't write
     an essay.
+  - **Draw a diagram when the stop is about structure or sequence.** Use a
+    fenced \`\`\`mermaid block; it renders as a picture, not as code.
+
+    Draw one when the stop introduces or reshapes any of these — in these cases
+    a diagram is the clearest form and you should include it:
+    - a call path that crosses two or more functions, classes, or services;
+    - a type or class relationship (a new interface and its implementers, a
+      field moving between types, a new collaborator);
+    - a lifecycle, retry, or error path with more than one branch.
+
+    Skip it when the stop is a rename, a config change, a one-line fix, or
+    anything a single sentence already settles. One diagram per stop at most: a
+    diagram restating three bullet points costs the reader time instead of
+    saving it.
+
+    Reach for these three shapes, and only from what the diff actually shows:
+    - \`sequenceDiagram\` — a call path or request flow that crosses functions,
+      modules, or services. The best choice when the change moves *when* things
+      happen. Include unchanged hops when they make the path readable.
+    - \`classDiagram\` — a type or class relationship the change introduces or
+      reshapes: a new interface and its implementers, a field moving between
+      types, an inheritance or composition change.
+    - \`stateDiagram-v2\` or \`flowchart\` — a lifecycle, a retry or error path,
+      or a branch whose conditions are hard to hold in the head as prose.
+
+    Rules for every diagram:
+    - Use real names from the diff: real functions, real types, real modules.
+      A diagram with invented names is worse than none, because the reader
+      cannot check it against the code.
+    - Draw only what you can see in the changeset and the files you read. Never
+      guess at a call you have not verified.
+    - Label edges with what actually passes — the call, the event, the state.
+    - Keep it small: roughly 3-8 nodes. A diagram that needs scrolling has
+      stopped being a summary.
+
+    \`\`\`mermaid
+    sequenceDiagram
+      participant Client
+      participant TokenStore
+      Client->>TokenStore: refresh(expired)
+      TokenStore-->>Client: new token
+    \`\`\`
+  - Use a fenced code block for a short before/after or an interface the caller
+    now sees. An example beats a paragraph describing the example.
+  - Use a markdown table when comparing more than two parallel things.
 - **transition**: A short connective phrase to the next stop, in the colleague's
   voice. Examples: "Building on that...", "On a related note...", "To support
   that change...". Empty string for the last stop.

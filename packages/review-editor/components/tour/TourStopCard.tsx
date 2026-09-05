@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { TourStop, TourDiffAnchor } from '../../hooks/tour/useTourData';
 import { DiffHunkPreview } from '../DiffHunkPreview';
-import { renderMarkdownProse } from '../../utils/renderMarkdownProse';
+import { RenderedMarkdown } from '@plannotator/ui/components/RenderedMarkdown';
 
 // ---------------------------------------------------------------------------
 // Inline anchor block
@@ -155,7 +155,11 @@ export const TourStopCard: React.FC<TourStopCardProps> = ({
                   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 200, damping: 22 } },
                 }}
               >
-                {renderMarkdownProse(stop.detail)}
+                {/* Full markdown, not the minimal prose renderer: a stop may
+                    carry a mermaid diagram, a table, or a code sample, and a
+                    picture of a call flow is cheaper to read than a paragraph
+                    describing it. */}
+                <RenderedMarkdown markdown={stop.detail} className="md-compact" />
               </motion.div>
 
               {stop.anchors.length > 0 && (

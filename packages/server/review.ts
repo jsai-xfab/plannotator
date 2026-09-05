@@ -793,13 +793,24 @@ export async function startReviewServer(
     // the same one its agent jobs run against — so PR reviews honor
     // `.gitattributes` exactly as a local review does. Only a PR with no
     // checkout yet, a workspace, or a non-git VCS falls back to names.
-    const localGitCwd = isPRMode
-      ? resolvePRLocalCwd()
-      : !workspace && gitContext && (sessionVcsType ?? "git") === "git"
+    //
+    // Whether git can answer is a separate question from where it runs:
+    // `resolveVcsCwd` legitimately returns undefined for a plain checkout, and
+    // `detectGeneratedFiles` takes `cwd: string | undefined` and falls back to
+    // the process directory. Collapsing the two into one nullable value drops
+    // a local review to name-only detection — it silently stops reading
+    // `.gitattributes` at all.
+    const prCheckoutCwd = isPRMode ? resolvePRLocalCwd() : undefined;
+    const canResolveAttributes = isPRMode
+      ? prCheckoutCwd !== undefined
+      : !workspace && !!gitContext && (sessionVcsType ?? "git") === "git";
+    const attributesCwd = isPRMode
+      ? prCheckoutCwd
+      : gitContext
         ? resolveVcsCwd(diffType as DiffType, gitContext.cwd)
         : undefined;
-    const generated = localGitCwd
-      ? await detectGeneratedFiles(gitRuntime, localGitCwd, paths)
+    const generated = canResolveAttributes
+      ? await detectGeneratedFiles(gitRuntime, attributesCwd, paths)
       : detectGeneratedFilesByName(paths);
     return generated.length > 0 ? generated : undefined;
   };
