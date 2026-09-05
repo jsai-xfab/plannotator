@@ -64,6 +64,33 @@ export interface GuideHostValue<P extends object = Record<string, unknown>> {
   onRevealFile?: (path: string) => void;
   /** Host-owned global search: the active match is routed to its chapter so an offscreen file mounts first. */
   activeSearchMatch?: GuideActiveSearchMatch | null;
+  /**
+   * Renders a chapter's overview markdown.
+   *
+   * A slot rather than a fixed renderer, because the two hosts can afford
+   * different amounts of markdown. The review app renders the full thing —
+   * mermaid diagrams, code blocks, tables — by supplying its own component. The
+   * portable viewer cannot: it ships to guides.show from a package that depends
+   * on `@plannotator/core` alone, and pulling the app's renderer in would drag
+   * the whole UI (and the Mermaid runtime) into the export.
+   *
+   * Omitted means the built-in prose renderer: paragraphs, headings, bullets,
+   * callouts and inline markdown. That is the floor every host meets, so a
+   * guide always reads correctly even where it cannot draw.
+   */
+  ProseRenderer?: React.ComponentType<{ markdown: string; tone?: 'foreground' | 'muted' }>;
+  /**
+   * Reports the files of the chapter the reader is currently in.
+   *
+   * Where a chapter's files sit in the tree is itself information: a chapter
+   * touching one package reads differently from one scattered across four, and
+   * that shape is invisible inside the guide's own list. A host that shows a
+   * file tree beside the guide uses this to light those rows up.
+   *
+   * Fires on chapter change, with the chapter's paths in guide order. Optional
+   * — the portable viewer has no tree and passes nothing.
+   */
+  onChapterFilesChange?: (paths: string[]) => void;
 }
 
 // The context erases the renderer's extra-prop generic; hosts recover typing at the provider site.

@@ -112,6 +112,8 @@ interface FileTreeProps {
   /** Omit to hide the generated-files row entirely (e.g. a non-git surface). */
   onToggleGeneratedFiles?: () => void;
   scrollHighlightIndex?: number;
+  /** Files of the guide chapter being read — highlighted while the guide is open. */
+  chapterFiles?: Set<string>;
   /** Absolute repo root for the "Copy full path" context menu item. Null/undefined hides the option (e.g. PR review mode). */
   repoRoot?: string | null;
   /** Current panel-view selection. The tree also renders as the FALLBACK for a
@@ -204,6 +206,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   showGeneratedFiles,
   onToggleGeneratedFiles,
   scrollHighlightIndex,
+  chapterFiles,
   repoRoot,
   panelView = 'tree',
   onSwitchToSections,
@@ -588,6 +591,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                       : activeFileIndex
                   }
                   scrollHighlightIndex={isAllFilesActive ? scrollHighlightIndex : undefined}
+                  chapterFiles={chapterFiles}
                   onSelectFile={onSelectFile}
                   onDoubleClickFile={onDoubleClickFile}
                   viewedFiles={viewedFiles}

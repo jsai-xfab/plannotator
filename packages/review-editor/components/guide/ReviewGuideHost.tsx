@@ -2,6 +2,24 @@ import React, { useCallback, useMemo } from 'react';
 import { GuideHostProvider, type GuideDiffRendererContext, type GuideHostValue } from '@plannotator/guide-viewer/host';
 import { useReviewState } from '../../dock/ReviewStateContext';
 import { AllFilesCodeView, type AllFilesCodeViewProps } from '../AllFilesCodeView';
+import { RenderedMarkdown } from '@plannotator/ui/components/RenderedMarkdown';
+
+/**
+ * A chapter overview rendered with everything the app can draw: mermaid
+ * diagrams, code blocks and tables, on top of the prose the portable viewer
+ * also handles. The guide chain calls this through `GuideHostValue.ProseRenderer`
+ * so the packaged export keeps its light renderer and its `core`-only
+ * dependency.
+ */
+const GuideProse: React.FC<{ markdown: string; tone?: 'foreground' | 'muted' }> = ({
+  markdown,
+  tone,
+}) => (
+  <RenderedMarkdown
+    markdown={markdown}
+    className={tone === 'muted' ? 'md-compact text-muted-foreground' : 'md-compact'}
+  />
+);
 
 /**
  * The review app's guide host: adapts ReviewState into the narrow contract the
@@ -90,8 +108,17 @@ export const ReviewGuideHost: React.FC<{ children: React.ReactNode }> = ({ child
       revealFile: state.guideRevealFile,
       onRevealFile: state.onGuideRevealFile,
       activeSearchMatch: state.allFilesActiveSearchMatch,
+      ProseRenderer: GuideProse,
+      onChapterFilesChange: state.onGuideChapterFilesChange,
     }),
-    [state.files, getDiffRendererProps, state.guideRevealFile, state.onGuideRevealFile, state.allFilesActiveSearchMatch],
+    [
+      state.files,
+      getDiffRendererProps,
+      state.guideRevealFile,
+      state.onGuideRevealFile,
+      state.allFilesActiveSearchMatch,
+      state.onGuideChapterFilesChange,
+    ],
   );
 
   return <GuideHostProvider value={value}>{children}</GuideHostProvider>;

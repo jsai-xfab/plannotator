@@ -83,6 +83,27 @@ export const GuideView: React.FC<GuideViewProps> = ({
     ?? resolved.unplacedFiles[0]?.path
     ?? null;
 
+  // Tell a host with a file tree which chapter the reader is in, so it can light
+  // that chapter's rows. Derived from the focused file rather than tracked
+  // separately: focus is what already moves as the reader walks the guide, and a
+  // second source of "where am I" would drift from it.
+  const onChapterFilesChange = host.onChapterFilesChange;
+  const activeChapterPaths = useMemo(() => {
+    if (!effectiveFocusedFile) return [];
+    const chapter =
+      resolved.sectionFiles.find((files) => files.some((f) => f.path === effectiveFocusedFile))
+      ?? (resolved.unplacedFiles.some((f) => f.path === effectiveFocusedFile)
+        ? resolved.unplacedFiles
+        : undefined);
+    return chapter ? chapter.map((f) => f.path) : [];
+  }, [resolved, effectiveFocusedFile]);
+  const chapterKey = activeChapterPaths.join('\n');
+  useEffect(() => {
+    // Keyed on the joined paths so re-renders that leave the chapter unchanged
+    // do not re-notify the host.
+    onChapterFilesChange?.(chapterKey ? chapterKey.split('\n') : []);
+  }, [onChapterFilesChange, chapterKey]);
+
   const localRevealTokenRef = useRef(0);
   const [localRevealTarget, setLocalRevealTarget] = useState<{ filePath: string; token: number } | null>(null);
   const externalRevealTarget = host.revealFile

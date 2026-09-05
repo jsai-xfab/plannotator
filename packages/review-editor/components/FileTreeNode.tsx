@@ -21,6 +21,9 @@ interface FileTreeNodeProps {
    *  sidecar's own `staged` flag is a snapshot and must never be ORed in. */
   stagedFiles: Set<string>;
   scrollHighlightIndex?: number;
+  /** Files of the guide chapter being read. Marked so the chapter's shape in
+   *  the repository is visible while reading it. */
+  chapterFiles?: Set<string>;
   /** Absolute repo root used to build the "Copy full path" menu item. Null in PR-review mode (files aren't on local disk). */
   repoRoot?: string | null;
   /** Since-base mode extras: sidecar lookup for untracked (U) / staged (dot)
@@ -62,6 +65,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   getAnnotationCount,
   stagedFiles,
   scrollHighlightIndex,
+  chapterFiles,
   repoRoot,
   getSectionEntry,
   onStageFile,
@@ -121,6 +125,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
             getAnnotationCount={getAnnotationCount}
             stagedFiles={stagedFiles}
             scrollHighlightIndex={scrollHighlightIndex}
+            chapterFiles={chapterFiles}
             repoRoot={repoRoot}
             getSectionEntry={getSectionEntry}
             onStageFile={onStageFile}
@@ -135,6 +140,9 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   // File node
   const isActive = node.fileIndex === activeFileIndex;
   const isScrollActive = !isActive && scrollHighlightIndex != null && node.fileIndex === scrollHighlightIndex;
+  // A row in the chapter currently being read. Kept distinct from active and
+  // scroll-active: those mark one row, this marks a set.
+  const isInChapter = chapterFiles !== undefined && chapterFiles.has(node.path);
   const isViewed = viewedFiles.has(node.path);
   const isStaged = stagedFiles.has(node.path);
   const annotationCount = getAnnotationCount(node.path);
@@ -159,7 +167,8 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
           <button
             onClick={() => onSelectFile(node.fileIndex!)}
             onDoubleClick={() => onDoubleClickFile?.(node.fileIndex!)}
-            className={`file-tree-item w-full text-left group ${isActive ? 'active' : isScrollActive ? 'scroll-active' : ''} ${annotationCount > 0 ? 'has-annotations' : ''} ${isStaged && !sinceBaseMode ? 'staged' : ''}`}
+            className={`file-tree-item w-full text-left group ${isActive ? 'active' : isScrollActive ? 'scroll-active' : ''} ${annotationCount > 0 ? 'has-annotations' : ''} ${isStaged && !sinceBaseMode ? 'staged' : ''} ${isInChapter ? 'in-chapter' : ''}`}
+            data-in-chapter={isInChapter ? 'true' : undefined}
             style={{ paddingLeft }}
           />
         }

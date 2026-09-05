@@ -523,6 +523,17 @@ const ReviewApp: React.FC = () => {
   // jumps while the guide is open route here instead of mutating the hidden
   // dock. Cleared on guide close below so reopening doesn't replay the reveal.
   const [guideRevealFile, setGuideRevealFile] = useState<{ path: string; token: number } | null>(null);
+  // The chapter the guide reader is in, reported by the guide chain. The file
+  // tree stays mounted during the guide and lights these rows: where a
+  // chapter's files sit in the tree says whether it is one cohesive change or
+  // four scattered ones, which the guide's own list cannot show.
+  const [guideChapterFiles, setGuideChapterFiles] = useState<Set<string>>(new Set());
+  const handleGuideChapterFilesChange = useCallback((paths: string[]) => {
+    setGuideChapterFiles(previous => {
+      if (previous.size === paths.length && paths.every(path => previous.has(path))) return previous;
+      return new Set(paths);
+    });
+  }, []);
   useEffect(() => {
     // BACKSTOP only — this effect runs AFTER a switched guide's keyed cards
     // have mounted (child effects before parent effects), so every
@@ -3703,6 +3714,8 @@ const ReviewApp: React.FC = () => {
     canStagePath: isPathStageable,
     currentWorktreePath: activeWorktreePath,
     guideRevealFile,
+    guideChapterFiles,
+    onGuideChapterFilesChange: handleGuideChapterFilesChange,
     onGuideRevealFile: handleGuideRevealFile,
     stageError,
     searchQuery: isSearchPending ? '' : debouncedSearchQuery,
@@ -3776,7 +3789,7 @@ const ReviewApp: React.FC = () => {
     handleSelectAnnotation, handleNavigateToAnnotation, handleDeleteAnnotation, viewedFiles,
     generatedFiles, expandedGeneratedFiles, handleGeneratedFileCollapsedChange,
     handleToggleViewed, reviewShowViewedControls, reviewShowStageControls, stagedFiles, stagingFile, stageFile,
-    canStageFiles, isPathStageable, activeWorktreePath, guideRevealFile, handleGuideRevealFile, stageError, isSearchPending, debouncedSearchQuery,
+    canStageFiles, isPathStageable, activeWorktreePath, guideRevealFile, handleGuideRevealFile, guideChapterFiles, handleGuideChapterFilesChange, stageError, isSearchPending, debouncedSearchQuery,
     activeFileSearchMatches, activeSearchMatchId, activeSearchMatch, searchMatches,
     aiAvailable, aiMessages, aiIsCreatingSession, aiIsStreaming,
     handleAskAI, handleAskAIForFile, handleViewAIResponse, handleClickAIMarker,
@@ -5129,6 +5142,7 @@ const ReviewApp: React.FC = () => {
                 width={fileTreeResize.width}
                 activeFileIndex={isAllFilesActive || isSemanticDiffActive || isCallFlowActive || isPROverviewActive ? -1 : activeFileIndex}
                 scrollHighlightIndex={isAllFilesActive && allFilesVisibleFile ? files.findIndex(f => f.path === allFilesVisibleFile) : undefined}
+                chapterFiles={guideOpen ? guideChapterFiles : undefined}
                 onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
                 onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}
                 enableKeyboardNav={!showExportModal && hasSearchableFiles}
@@ -5212,7 +5226,11 @@ const ReviewApp: React.FC = () => {
               />
             </ReviewNavigatorContainer>
           )}
-          {!guideOpen && shouldShowFileTree && isNavigatorOpen && !(sectionsAvailable && panelView === 'sections') && !showCommitsPanel && (
+          {/* The tree stays mounted while the guide is open, and only the tree:
+              Git status and Commits group by lifecycle, which says nothing
+              about a chapter. The tree shows repository shape, which is the
+              thing a chapter's highlighted rows are read against. */}
+          {shouldShowFileTree && isNavigatorOpen && (guideOpen || (!(sectionsAvailable && panelView === 'sections') && !showCommitsPanel)) && (
             <ReviewNavigatorContainer
               isCompactTouchLayout={isCompactTouchLayout}
               onClose={() => setIsCompactNavigatorOpen(false)}
@@ -5244,6 +5262,7 @@ const ReviewApp: React.FC = () => {
                 showGeneratedFiles={showGeneratedFiles}
                 onToggleGeneratedFiles={handleToggleGeneratedFiles}
                 scrollHighlightIndex={isAllFilesActive && allFilesVisibleFile ? files.findIndex(f => f.path === allFilesVisibleFile) : undefined}
+                chapterFiles={guideOpen ? guideChapterFiles : undefined}
                 onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
                 onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}
                 annotations={allAnnotations}

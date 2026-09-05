@@ -274,6 +274,18 @@ diffs-container {
   background: oklch(from var(--foreground) l c h / 0.06);
 }
 
+/* Files of the guide chapter being read. A left marker rather than a fill:
+   the row already uses background for active, scroll-active and staged, and a
+   fourth fill would compete with all three. The marker reads as "these belong
+   together" down the tree, which is the shape the reader is looking for. */
+.file-tree-item.in-chapter {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.file-tree-item.in-chapter:not(.active) {
+  background: oklch(from var(--primary) l c h / 0.07);
+}
+
 .file-tree-item.staged {
   background: oklch(from var(--success) l c h / 0.1);
 }

@@ -195,7 +195,16 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
             </div>
 
             {section.overview && (
-              <div className="mt-3.5 space-y-2.5 md:flex-none">{renderMarkdownProse(section.overview, { tone: 'muted' })}</div>
+              <div className="mt-3.5 space-y-2.5 md:flex-none">
+                {/* The host decides how much markdown a chapter can show: the
+                    review app renders diagrams and tables, the portable export
+                    falls back to prose. See GuideHostValue.ProseRenderer. */}
+                {host.ProseRenderer ? (
+                  <host.ProseRenderer markdown={section.overview} tone="muted" />
+                ) : (
+                  renderMarkdownProse(section.overview, { tone: 'muted' })
+                )}
+              </div>
             )}
 
             {section.diffs.length > 0 && (

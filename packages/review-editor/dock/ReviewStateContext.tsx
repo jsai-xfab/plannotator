@@ -174,6 +174,10 @@ export interface ReviewState {
    *  card opens and its section CodeView expands + scrolls to the virtualized
    *  file item. Cleared when the guide closes so a reopen doesn't replay the
    *  last reveal. */
+  /** Files of the guide chapter the reader is in — highlighted in the file tree
+   *  so the chapter's shape in the repository is visible while reading it. */
+  guideChapterFiles: Set<string>;
+  onGuideChapterFilesChange: (paths: string[]) => void;
   guideRevealFile?: { path: string; token: number } | null;
   /** Sets guideRevealFile with a fresh token. Entry point for jumps that
    *  originate INSIDE the guide (section file chips) so they get the same

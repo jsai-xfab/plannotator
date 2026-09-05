@@ -30,6 +30,8 @@ Everything below serves one of those two problems.
 | 7 | **Guided Review plans against source only.** Generated files are no longer sent to the guide agent, so no chapter is spent on a lockfile. | `packages/server/review.ts` |
 | 8 | **The review skill teaches the loop.** Classify each thread, say how you read it, edit for a change request, answer a question without touching files, resolve only what you changed. | `apps/skills/core/plannotator-review/SKILL.md` |
 | 9 | **Code Tour stops render diagrams.** A stop's detail goes through the full markdown renderer, so a ```mermaid fence renders as a picture — plus code blocks and tables. The tour prompt asks for a diagram when a stop is about structure or sequence, drawn from real names in the diff. | `packages/ui/components/RenderedMarkdown.tsx`, `TourStopCard.tsx`, `packages/server/tour/tour-review.ts` |
+| 10 | **Guided Review chapters render diagrams too.** The guide chain gained a `ProseRenderer` slot on its host contract: the review app supplies the full renderer, the portable guides.show export keeps the light one and its `core`-only dependency. | `packages/guide-viewer/host.tsx`, `GuideSectionCard.tsx`, `ReviewGuideHost.tsx` |
+| 11 | **The file tree stays open during a guide, and lights the current chapter.** Upstream hides the tree in the takeover. Where a chapter's files sit in the repository is itself information — one cohesive package or four scattered ones — and the guide's own list cannot show it. The chapter is derived from the focused file and reported through the same host seam. | `packages/guide-viewer/host.tsx`, `GuideView.tsx`, `FileTreeNode.tsx`, `App.tsx` |
 
 ### The cost of row 9
 
@@ -67,7 +69,8 @@ These arrived with plannotator. Several are easy to mistake for our work.
 - **Rounds have no view.** Round 6 records data nothing reads yet.
 - **Markdown review records no rounds.** Only code review does; `packages/server/annotate.ts` is untouched.
 - **Only Python has a comment rule.** Every other language counts every changed line.
-- **Guided Review still draws nothing.** Only Code Tour got the full renderer. `guide-viewer` depends on `core` alone — it is the portable renderer shipped to guides.show — so it cannot pull in `@plannotator/ui`. Giving guides diagrams means a `core`-only markdown renderer, or accepting that dependency.
+- **A guide exported to guides.show still draws nothing.** The `ProseRenderer` slot is filled by the review app only; the portable viewer keeps the light renderer, because `guide-viewer` depends on `core` alone. A shared guide shows the diagram as source. Fixing that means a `core`-only markdown-plus-mermaid renderer.
+- **The guide prompt does not ask for diagrams yet.** Only the tour prompt does. Chapters render them when present, so this is a prompt change away.
 - **Diagrams are likely, not guaranteed.** The tour prompt asks for one when a stop is about structure or sequence, and the model still decides. Observed: one diagram in one run, none in the next on the same small changeset.
 - **Tour anchors still land on the file, not the line.** `TourDiffAnchor` carries `line` and `end_line`, and `onAnchorClick` passes only `anchor.file`. There is no line-reveal primitive — the guide reveal channel is `{ path, token }` — so this needs new plumbing.
 - **Code Tour is still a modal.** It should be a center dock panel, beside the diff rather than covering it.
