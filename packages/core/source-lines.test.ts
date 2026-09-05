@@ -71,6 +71,48 @@ describe("countSourceLines — python", () => {
     expect(countSourceLines(hunk('+    r"""raw doc"""'), "python").additions).toBe(0);
   });
 
+  it("counts a docstring that never closes inside the hunk", () => {
+    // A hunk can open a docstring whose closing quotes fall outside it. The
+    // close is unknowable from the hunk, so counting stops being safe: treat
+    // the unclosed tail as source rather than suppressing real code.
+    const counts = countSourceLines(
+      hunk(
+        "+def compute(a, b):",
+        '+    """Return the sum.',
+        "+",
+        "+    Explanation continues past this hunk...",
+        "+    x = a + b",
+        "+    return x",
+      ),
+      "python",
+    );
+    expect(counts.additions).toBe(5);
+  });
+
+  it("still suppresses a docstring that does close inside the hunk", () => {
+    const counts = countSourceLines(
+      hunk("+def f():", '+    """Doc.', "+    More doc.", '+    """', "+    return 1"),
+      "python",
+    );
+    expect(counts.additions).toBe(2);
+  });
+
+  it("resolves each hunk's unclosed block on its own", () => {
+    const counts = countSourceLines(
+      [
+        "@@ -1,0 +1,2 @@",
+        '+    """Doc.',
+        "+    unclosed tail",
+        "@@ -10,0 +20,2 @@",
+        '+    """Doc.',
+        '+    """',
+      ],
+      "python",
+    );
+    // First hunk never closes → both lines count. Second closes → neither does.
+    expect(counts.additions).toBe(2);
+  });
+
   it("tracks the old and new sides independently", () => {
     // The removed lines open a docstring; the added lines do not. Tracking one
     // mixed sequence would leak the removed docstring state onto the additions.

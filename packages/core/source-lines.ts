@@ -124,14 +124,57 @@ function findBlockOpen(line: string): { index: number; delimiter: BlockDelimiter
 }
 
 /**
+ * One side of one hunk, read line by line, with the unclosed-block rule applied.
+ *
+ * A hunk shows a window into a file, so a docstring it opens may close outside
+ * that window. Suppressing everything after such an opening hides real code —
+ * a `def` and its body can vanish from the count. When a docstring is still
+ * open at the end of the hunk, the lines from its opening onward are counted
+ * instead. Under-counting hides change; over-counting only wastes a little
+ * attention, so the tie breaks toward counting.
+ */
+function countHunkSide(bodies: readonly { body: string; counts: boolean }[]): number {
+  let state: PythonState = { delimiter: null, isDocstring: false };
+  const isSource: boolean[] = [];
+  // Where the still-open docstring started, or -1 when no block is open.
+  let openedAt = -1;
+
+  for (let i = 0; i < bodies.length; i += 1) {
+    const wasOpen = state.delimiter !== null;
+    const read = readPythonLine(bodies[i].body, state);
+    if (!wasOpen && read.state.delimiter !== null && read.state.isDocstring) openedAt = i;
+    if (wasOpen && read.state.delimiter === null) openedAt = -1;
+    state = read.state;
+    isSource.push(read.isSource);
+  }
+
+  if (state.delimiter !== null && state.isDocstring && openedAt >= 0) {
+    // Recover the suppressed tail, but keep the two rules that hold whether or
+    // not a docstring is open: a blank line and a `#` comment are never source.
+    for (let i = openedAt; i < isSource.length; i += 1) {
+      const trimmed = bodies[i].body.trim();
+      isSource[i] = trimmed.length > 0 && !trimmed.startsWith("#");
+    }
+  }
+
+  let total = 0;
+  for (let i = 0; i < bodies.length; i += 1) {
+    if (bodies[i].counts && isSource[i]) total += 1;
+  }
+  return total;
+}
+
+/**
  * Count the source lines a file's diff adds and removes.
  *
  * `lines` are the raw lines of one file's chunk, headers included. Lines above
  * the first hunk are skipped.
  *
- * The two sides are read separately. An added line belongs to the new file and
- * a removed line belongs to the old one, so one mixed pass would leak a removed
- * docstring's state onto the additions.
+ * Each hunk is read separately, and within it each side separately. An added
+ * line belongs to the new file and a removed line to the old one, so one mixed
+ * pass would leak a removed docstring's state onto the additions. Hunks are
+ * independent because a hunk starts at an unknown place in the file and can
+ * carry no block state across the gap.
  */
 export function countSourceLines(
   lines: readonly string[],
@@ -141,17 +184,21 @@ export function countSourceLines(
 
   let additions = 0;
   let deletions = 0;
-  let newSide: PythonState = { delimiter: null, isDocstring: false };
-  let oldSide: PythonState = { delimiter: null, isDocstring: false };
+  let newSide: { body: string; counts: boolean }[] = [];
+  let oldSide: { body: string; counts: boolean }[] = [];
   let inHunk = false;
+
+  const finishHunk = () => {
+    additions += countHunkSide(newSide);
+    deletions += countHunkSide(oldSide);
+    newSide = [];
+    oldSide = [];
+  };
 
   for (const line of lines) {
     if (line.startsWith("@@")) {
+      if (inHunk) finishHunk();
       inHunk = true;
-      // A hunk starts at an unknown place in the file, so neither side can
-      // carry block state across the gap.
-      newSide = { delimiter: null, isDocstring: false };
-      oldSide = { delimiter: null, isDocstring: false };
       continue;
     }
     if (!inHunk) continue;
@@ -159,19 +206,17 @@ export function countSourceLines(
 
     const body = line.slice(1);
     if (line.startsWith("+")) {
-      const read = readPythonLine(body, newSide);
-      newSide = read.state;
-      if (read.isSource) additions += 1;
+      newSide.push({ body, counts: true });
     } else if (line.startsWith("-")) {
-      const read = readPythonLine(body, oldSide);
-      oldSide = read.state;
-      if (read.isSource) deletions += 1;
+      oldSide.push({ body, counts: true });
     } else {
-      // A context line sits in both files and counts in neither.
-      newSide = readPythonLine(body, newSide).state;
-      oldSide = readPythonLine(body, oldSide).state;
+      // A context line sits in both files and counts in neither, but it still
+      // moves each side's block state.
+      newSide.push({ body, counts: false });
+      oldSide.push({ body, counts: false });
     }
   }
+  if (inHunk) finishHunk();
 
   return { additions, deletions };
 }

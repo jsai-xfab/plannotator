@@ -784,14 +784,22 @@ export async function startReviewServer(
     diffType: string = currentDiffType as string,
   ): Promise<string[] | undefined> => {
     const paths = listPatchFiles(patch).map((f) => f.path);
-    const plainLocalGit =
-      !isPRMode && !workspace && gitContext && (sessionVcsType ?? "git") === "git";
-    const generated = plainLocalGit
-      ? await detectGeneratedFiles(
-          gitRuntime,
-          resolveVcsCwd(diffType as DiffType, gitContext.cwd),
-          paths,
-        )
+    // Where a checkout of the reviewed code exists, ask git to resolve
+    // attributes there: `.gitattributes` is how a repository states which of
+    // its files are generated, and the name-based defaults alone miss every
+    // repository-specific rule (a marked test suite, `*.md`, a vendored tree).
+    //
+    // A PR review has such a checkout whenever the local worktree is ready —
+    // the same one its agent jobs run against — so PR reviews honor
+    // `.gitattributes` exactly as a local review does. Only a PR with no
+    // checkout yet, a workspace, or a non-git VCS falls back to names.
+    const localGitCwd = isPRMode
+      ? resolvePRLocalCwd()
+      : !workspace && gitContext && (sessionVcsType ?? "git") === "git"
+        ? resolveVcsCwd(diffType as DiffType, gitContext.cwd)
+        : undefined;
+    const generated = localGitCwd
+      ? await detectGeneratedFiles(gitRuntime, localGitCwd, paths)
       : detectGeneratedFilesByName(paths);
     return generated.length > 0 ? generated : undefined;
   };
@@ -2928,6 +2936,9 @@ export async function startReviewServer(
                 gitRef: currentGitRef,
                 snapshotId: currentSnapshotId(),
                 approvalNotesSupported,
+                // Recomputed for the PR being switched TO. Without it the
+                // client keeps the previous PR's set and hides the wrong files.
+                generatedFiles: (await buildGeneratedFilesSidecar()) ?? [],
                 prMetadata: pr.metadata,
                 // The new PR's checkout (null while warming) so Open-in re-roots
                 // immediately on switch instead of waiting for the 5s probe.

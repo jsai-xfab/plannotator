@@ -2807,6 +2807,9 @@ const ReviewApp: React.FC = () => {
     callFlow?: CallFlowAdvert;
     agentCwd?: string | null;
     approvalNotesSupported?: boolean;
+    /** Generated files for the PR being switched to. Recomputed server-side per
+     *  PR — carrying the previous PR's set over would hide the wrong files. */
+    generatedFiles?: string[];
   }) {
     const isPRSwitch = !!data.prMetadata;
     setSnapshotId(data.snapshotId);
@@ -2819,7 +2822,11 @@ const ReviewApp: React.FC = () => {
     dockApi?.getPanel(REVIEW_DIFF_PANEL_ID)?.api.close();
     needsInitialDiffPanel.current = true;
     setDiffData(prev => prev ? { ...prev, rawPatch: data.rawPatch, gitRef: data.gitRef, aiReviewContext: data.aiReviewContext } : prev);
-    const visibleFiles = publishFiles(nextFiles);
+    // A PR switch brings its own generated set; a response without one leaves
+    // the current set alone rather than clearing it.
+    const nextGenerated = data.generatedFiles ? new Set(data.generatedFiles) : undefined;
+    if (nextGenerated) setGeneratedFiles(nextGenerated);
+    const visibleFiles = publishFiles(nextFiles, nextGenerated);
     if (isPRSwitch) {
       setActiveFileIndex(0);
     } else {
