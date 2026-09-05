@@ -187,10 +187,13 @@ never shares a chapter.
 #### Section fields
 - **title**: Concept-level, e.g. "Payment localization module". NEVER a
   filename paraphrase like "Changes to payments/locale.ts".
-- **overview**: Markdown, 2-6 sentences of prose, PLUS a diagram whenever the
-  section is about structure or sequence (see "Diagrams" below — a diagram does
-  not count against the sentence budget, and is expected on structural
-  sections rather than being an optional flourish). Three jobs, in order:
+- **overview**: Markdown, 4-10 sentences of prose for a section that carries
+  real work, PLUS one or two diagrams whenever the section is about
+  structure, sequence, process, or data shape (see "Diagrams" below — a
+  diagram does not count against the sentence budget, and is expected on such
+  sections rather than being an optional flourish). A trailing glue or
+  housekeeping chapter stays at 1-2 sentences and needs no diagram. Three
+  jobs, in order:
   1. What changed here, concretely.
   2. Why it exists: the motivation, and non-obvious decisions ("we did X
      instead of Y because Z" is exactly what a reviewer needs and cannot
@@ -222,25 +225,51 @@ never shares a chapter.
 
 #### Diagrams
 
-A fenced \`\`\`mermaid block inside an overview renders as a picture. Include one
-in every section that introduces or reshapes any of the following — for these a
-picture is the clearest form available, and prose alone under-serves the reader:
+A fenced \`\`\`mermaid block inside an overview renders as a picture. Draw one
+in EVERY section that introduces or reshapes any of the five shapes below. For
+these a picture is the clearest form available, and prose alone under-serves
+the reader. This is the expected default for a section that carries real work,
+not a flourish you add when you have time.
 
-- a call or data path crossing two or more functions, classes, modules or
-  services — use \`sequenceDiagram\`;
-- a type relationship: a new interface and its implementers, a field moving
-  between types, a new collaborator — use \`classDiagram\`;
-- a lifecycle, retry, or error path with more than one branch — use
-  \`stateDiagram-v2\` or \`flowchart\`.
+Pick the shape by what the section actually changes:
 
-Skip it for a rename, an import bump, a config change, or anything one sentence
-settles. One diagram per section at most.
+1. **Call path or control flow across units** — a request that now travels
+   through a new function, a handler that delegates to a new collaborator, an
+   added round trip to a store or a service. Use \`sequenceDiagram\`. Draw the
+   AFTER state; add a second diagram of the BEFORE state only when the point
+   of the section is that the path moved.
+2. **Types and architecture** — a new interface and its implementers, a class
+   split in two, a field moving between types, a module gaining a dependency.
+   Use \`classDiagram\`. Show the members that changed, not every member.
+3. **Process flow with branches** — validation that can fail two ways, a retry
+   with a fallback, a pipeline with a short-circuit, a decision the code now
+   makes. Use \`flowchart TD\`. Label every branch edge with its condition.
+4. **Lifecycle or state machine** — a job, a session, a connection, or a
+   record that moves between named states. Use \`stateDiagram-v2\`.
+5. **Data shape** — a schema migration, a new table or collection, a changed
+   relation between records. Use \`erDiagram\`.
 
-Every node and edge must use real names from the diff — real functions, real
-types, real modules — and describe only what the changeset and the files you
-have read actually show. A diagram with invented names is worse than none,
-because the reader cannot check it against the code. Keep it to roughly 3-8
-nodes; a diagram that needs scrolling has stopped being a summary.
+Skip a diagram for a rename, an import bump, a config change, a copy edit, or
+anything one sentence settles. Skip it in the trailing glue chapter.
+
+At most two diagrams per section, and a second one only when the section
+genuinely carries two of the five shapes (for example a new type AND the call
+path that uses it). Two diagrams of the same shape belong in one diagram.
+
+Rules for every diagram:
+
+- **Real names only.** Every node, participant, class, state, and edge label
+  uses a name that appears in the diff or in a file you have read: real
+  functions, real types, real modules, real states. A diagram with invented
+  names is worse than none, because the reader cannot check it against the
+  code. If you do not know a name, leave the node out.
+- **Keep it small.** Roughly 3-8 nodes. A diagram that needs scrolling has
+  stopped being a summary. Split a large one across two sections instead.
+- **Say what the diagram shows.** One sentence of prose next to it that names
+  the thing the reader should notice. A diagram alone is not an explanation.
+- **Valid Mermaid 11 syntax.** Quote any label that holds a bracket, a colon,
+  or a comma. Never put a bare parenthesis in a flowchart node label. A block
+  that fails to parse renders as an error box.
 
 \`\`\`mermaid
 sequenceDiagram
@@ -250,6 +279,27 @@ sequenceDiagram
   Discriminator->>MethodPlan: methods (ordered tuple)
   MethodPlan->>Aggregator: run all at once
   Aggregator-->>Discriminator: first claim per identity
+\`\`\`
+
+\`\`\`mermaid
+classDiagram
+  class GuideHost {
+    +ProseRenderer
+    +onChapterFilesChange()
+  }
+  class ReviewGuideHost
+  class ShareGuideHost
+  GuideHost <|-- ReviewGuideHost
+  GuideHost <|-- ShareGuideHost
+\`\`\`
+
+\`\`\`mermaid
+flowchart TD
+  A[detectGeneratedFiles] --> B{git check-attr available}
+  B -->|yes| C[resolve linguist-generated]
+  B -->|no| D[detectGeneratedFilesByName]
+  C --> E[drop from tree and counts]
+  D --> E
 \`\`\`
 
 - **diffs**: one or more file references. Each has two fields:
@@ -295,8 +345,12 @@ accounted for.
 - No emoji anywhere.
 - title: one line.
 - intent: 1-2 sentences, not a paragraph.
-- Section overview: 2-6 sentences. Do not write an essay; do not write one
-  bare clause either.
+- Section overview: 4-10 sentences for a section that carries real work, 1-2
+  for a trailing glue chapter. Match the length to the weight of the change.
+  Do not write an essay; do not write one bare clause either.
+- Diagrams do not count toward the sentence budget. A section about a call
+  path, a type relationship, a branching process, a lifecycle, or a data
+  shape gets a diagram.
 
 ## Calibration: guide, not review
 Your job is to EXPLAIN and ORIENT the reviewer, not to critique the code.
@@ -322,10 +376,14 @@ bugs; that is normal and expected, not a sign you did not look hard enough.
    trailing grouped chapter for glue and low-signal changes.
 6. Write the title, intent, and each section's overview (what changed, why,
    key implications; flag where the risk concentrates).
-7. Verify coverage: every changed file appears in exactly one section's
+7. For each section, ask which of the five diagram shapes it carries: call
+   path, types, branching process, lifecycle, data shape. Draw the diagram
+   for every shape you find, using real names from the diff. A section that
+   carries none needs none.
+8. Verify coverage: every changed file appears in exactly one section's
    diffs, or in unplacedFiles. Fix any file that is missing, duplicated, or
    misspelled before returning.
-8. Return structured JSON matching the schema.`;
+9. Return structured JSON matching the schema.`;
 
 /**
  * The guide methodology, optionally extended with reviewer-supplied extra
@@ -591,7 +649,7 @@ ${markerOpen(nonce)}
   "sections": [
     {
       "title": "Guide marker contract",
-      "overview": "Explains what changed here, why it exists, and its key implications, in 2-6 sentences.",
+      "overview": "Explains what changed here, why it exists, and its key implications, in 4-10 sentences, with a mermaid diagram when the section changes a call path, a type relationship, a process, a lifecycle, or a data shape.",
       "diffs": [
         { "file": "packages/server/guide/guide-review.ts", "summary": "Adds the marker output contract so engines without a schema flag return the same guide JSON." }
       ]
@@ -606,10 +664,15 @@ Schema:
 - intent: string, 1-2 sentences.
 - sections: array of objects, each with
   - title: string — concept-level chapter title, NEVER a filename paraphrase
-  - overview: string — markdown, 2-6 sentences: what changed, why it exists,
+  - overview: string — markdown, 4-10 sentences for a section that carries
+    real work (1-2 for a trailing glue chapter): what changed, why it exists,
     and its key implications. Backtick file names/symbols/config keys; bold
     the single key clause; bullets only for 3+ parallel changes; a tiny
-    fenced code block only when code says it better than prose
+    fenced code block only when code says it better than prose. Include a
+    fenced \`\`\`mermaid diagram, using real names from the diff, whenever the
+    section changes a call path (\`sequenceDiagram\`), a type relationship
+    (\`classDiagram\`), a branching process (\`flowchart TD\`), a lifecycle
+    (\`stateDiagram-v2\`), or a data shape (\`erDiagram\`)
   - diffs: array of objects, each with two fields:
     - file: string — the EXACT repo-relative path as it appears in the diff or
       the Changed files list; never invented, abbreviated, or re-cased
