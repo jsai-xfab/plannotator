@@ -122,8 +122,6 @@ interface FileTreeProps {
   onSwitchToSections?: () => void;
   /** When the commit-history view is available, offers its toggle segment. */
   onSwitchToCommits?: () => void;
-  /** Switch to the walkthrough groups. Omit before a Guided Review exists. */
-  onSwitchToGroups?: () => void;
   /** Selects the tree view through the app's shared panel-view funnel. */
   onSwitchToTree?: () => void;
   /** Sections sidecar while the since-base diff is displayed as a tree —
@@ -210,7 +208,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
   panelView = 'tree',
   onSwitchToSections,
   onSwitchToCommits,
-  onSwitchToGroups,
   onSwitchToTree,
   sinceBaseSections,
   onStageFile,
@@ -409,11 +406,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
             view={panelView}
             showSections={!!onSwitchToSections}
             showCommits={!!onSwitchToCommits}
-            showGroups={!!onSwitchToGroups}
             onSelect={(view) => {
               if (view === 'sections') onSwitchToSections?.();
               else if (view === 'commits') onSwitchToCommits?.();
-              else if (view === 'groups') onSwitchToGroups?.();
               else onSwitchToTree?.();
             }}
           />

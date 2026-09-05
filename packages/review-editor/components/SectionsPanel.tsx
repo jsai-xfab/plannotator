@@ -87,8 +87,6 @@ interface SectionsPanelProps {
   onSelectPanelView: (view: 'sections' | 'commits' | 'tree') => void;
   /** Offer the Commits segment (git-local sessions only). */
   showCommitsOption?: boolean;
-  /** Offer the walkthrough Groups segment. False before a guide exists. */
-  showGroupsOption?: boolean;
   /** All files nav row — the review's landing view, listed first. */
   onSelectAllFiles?: () => void;
   isAllFilesActive?: boolean;
@@ -244,7 +242,6 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
   recentCommits,
   onSelectPanelView,
   showCommitsOption,
-  showGroupsOption,
   onSelectAllFiles,
   isAllFilesActive,
   generatedFileCount,
@@ -562,12 +559,7 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
         className="px-3 flex items-center border-b border-border/50 flex-shrink-0"
         style={{ height: 'var(--panel-header-h)' }}
       >
-        <PanelViewToggle
-          view="sections"
-          onSelect={onSelectPanelView}
-          showCommits={showCommitsOption}
-          showGroups={showGroupsOption}
-        />
+        <PanelViewToggle view="sections" onSelect={onSelectPanelView} showCommits={showCommitsOption} />
       </div>
 
       {/* Baseline row — the ONLY comparison control in this view. The sections

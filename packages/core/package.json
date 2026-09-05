@@ -9,7 +9,6 @@
     "./source-lines": "./source-lines.ts",
     "./thread-resolution": "./thread-resolution.ts",
     "./since-review": "./since-review.ts",
-    "./guide-groups": "./guide-groups.ts",
     "./guide": "./guide.ts",
     "./guide-format": "./guide-format.ts",
     "./annotatable": "./annotatable.ts",

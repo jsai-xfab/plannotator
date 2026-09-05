@@ -148,10 +148,6 @@ import type { DiffFile, AnnotationScrollTarget } from './types';
 import { annotationMatchesPrScope, proseAnnotationMatchesPr } from './utils/annotationScope';
 import type { DiffOption, WorktreeInfo, GitContext, SinceBaseSections, CommitDiffInfo } from '@plannotator/shared/types';
 import { SectionsPanel } from './components/SectionsPanel';
-import { GuideGroupsPanel } from './components/GuideGroupsPanel';
-import { PanelViewToggle } from './components/PanelViewToggle';
-import { useGuideData } from './hooks/guide/useGuideData';
-import { SAVED_GUIDE_ID_PREFIX } from '@plannotator/shared/guide';
 import { CommitsPanel } from './components/CommitsPanel';
 import { useCommitsView } from './hooks/useCommitsView';
 import { ReviewSetupDialog } from './components/ReviewSetupDialog';
@@ -1696,27 +1692,6 @@ const ReviewApp: React.FC = () => {
     }
   }, [agentJobs.jobs, jobMatchesCurrentContext]);
 
-  // Adopt the newest saved guide for THIS repository on load, without opening
-  // the takeover. The Groups panel groups the file list by the walkthrough, and
-  // requiring the reviewer to open the full-screen guide first just to unlock
-  // that would defeat the point: the grouping is meant to be read beside the
-  // diff, not after a detour through another screen. Sets the id only — the
-  // takeover still opens on the reviewer's own action.
-  useEffect(() => {
-    if (!origin || activeGuideJobId) return;
-    let cancelled = false;
-    void fetch('/api/guides')
-      .then(response => (response.ok ? response.json() : []))
-      .then((saved: Array<{ id: string }>) => {
-        if (cancelled || !Array.isArray(saved) || saved.length === 0) return;
-        setActiveGuideJobId(`${SAVED_GUIDE_ID_PREFIX}${saved[0].id}`);
-      })
-      .catch(() => {
-        // No saved guide is the normal case; the Groups segment stays hidden.
-      });
-    return () => { cancelled = true; };
-  }, [origin, activeGuideJobId]);
-
   // Standalone/demo mode (no origin ⇒ no real agent-jobs backend): opening the
   // guide takeover shows the demo fixture so the UI can be iterated on without
   // a live agent run, same spirit as the dev-only demo tour toggle below.
@@ -2735,16 +2710,7 @@ const ReviewApp: React.FC = () => {
   // 'sections'/'commits' selection the session can't offer resolves to the
   // tree, so the toggle highlights the panel on screen. Surfaces that render
   // by view must read this, never the raw panelView.
-  // The walkthrough, read here as well as inside the guide screen, so the file
-  // panel can group by it. Passing the empty string when no guide has completed
-  // keeps the hook unconditional (React requires that) while it fetches nothing.
-  const { guide: activeGuide } = useGuideData(activeGuideJobId ?? '');
-  const guideGroupsAvailable = (activeGuide?.sections.length ?? 0) > 0;
-  const effectivePanelView = resolvePanelView(panelView, {
-    sectionsAvailable,
-    commitsCapable,
-    groupsAvailable: guideGroupsAvailable,
-  });
+  const effectivePanelView = resolvePanelView(panelView, { sectionsAvailable, commitsCapable });
 
   // The all-files surface mirrors whichever left panel is showing: sections
   // order when the sections view is active, tree order otherwise.
@@ -5143,36 +5109,7 @@ const ReviewApp: React.FC = () => {
 
         {/* Main content */}
         <div className={`relative flex-1 flex overflow-hidden ${isResizing ? 'select-none' : ''}`}>
-          {!guideOpen && shouldShowFileTree && isNavigatorOpen && effectivePanelView === 'groups' && (
-            <ReviewNavigatorContainer
-              isCompactTouchLayout={isCompactTouchLayout}
-              onClose={() => setIsCompactNavigatorOpen(false)}
-              context={compactNavigatorContext}
-              resizeHandle={fileTreeResizeHandle}
-            >
-              <GuideGroupsPanel
-                guide={activeGuide}
-                files={files}
-                activeFileIndex={activeFileIndex}
-                annotations={allAnnotations}
-                viewedFiles={viewedFiles}
-                onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
-                onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}
-                onToggleViewed={handleToggleViewed}
-                panelControls={
-                  <PanelViewToggle
-                    view={effectivePanelView}
-                    onSelect={handlePanelViewSelect}
-                    showSections={sectionsAvailable}
-                    showCommits={commitsCapable}
-                    showGroups={guideGroupsAvailable}
-                  />
-                }
-              />
-            </ReviewNavigatorContainer>
-          )}
-
-          {!guideOpen && shouldShowFileTree && isNavigatorOpen && effectivePanelView !== 'groups' && sectionsAvailable && panelView === 'sections' && (
+          {!guideOpen && shouldShowFileTree && isNavigatorOpen && sectionsAvailable && panelView === 'sections' && (
             <ReviewNavigatorContainer
               isCompactTouchLayout={isCompactTouchLayout}
               onClose={() => setIsCompactNavigatorOpen(false)}
@@ -5212,7 +5149,6 @@ const ReviewApp: React.FC = () => {
                 recentCommits={gitContext?.recentCommits}
                 onSelectPanelView={handlePanelViewSelect}
                 showCommitsOption={commitsCapable}
-                showGroupsOption={guideGroupsAvailable}
                 onSelectAllFiles={() => completeNavigatorSelection(openAllFilesPanel)}
                 isAllFilesActive={isAllFilesActive}
                 generatedFileCount={generatedFiles.size}
@@ -5269,7 +5205,7 @@ const ReviewApp: React.FC = () => {
               />
             </ReviewNavigatorContainer>
           )}
-          {!guideOpen && shouldShowFileTree && isNavigatorOpen && effectivePanelView !== 'groups' && !(sectionsAvailable && panelView === 'sections') && !showCommitsPanel && (
+          {!guideOpen && shouldShowFileTree && isNavigatorOpen && !(sectionsAvailable && panelView === 'sections') && !showCommitsPanel && (
             <ReviewNavigatorContainer
               isCompactTouchLayout={isCompactTouchLayout}
               onClose={() => setIsCompactNavigatorOpen(false)}
@@ -5353,7 +5289,6 @@ const ReviewApp: React.FC = () => {
                 panelView={effectivePanelView}
                 onSwitchToSections={sectionsCapable ? handleSwitchToSections : undefined}
                 onSwitchToCommits={commitsCapable ? () => handlePanelViewSelect('commits') : undefined}
-                onSwitchToGroups={guideGroupsAvailable ? () => handlePanelViewSelect('groups') : undefined}
                 onSwitchToTree={() => handlePanelViewSelect('tree')}
                 sinceBaseSections={activeDiffBase === 'since-base' ? sections : null}
                 onStageFile={canStageFiles ? stageFile : undefined}

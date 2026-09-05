@@ -33,14 +33,11 @@ import {
   type GuideSnapshot,
   type GuideSnapshotSource,
 } from "@plannotator/core/guide-format";
-import { SAVED_GUIDE_ID_PREFIX } from "@plannotator/core/guide";
 
 export type { SavedGuideListEntry };
 
-/** Client-facing pseudo job-id prefix for persisted guides ("saved:{id}").
- *  Defined in the browser-safe guide module and re-exported here, so the review
- *  app can read it without pulling this node-bound store into its bundle. */
-export { SAVED_GUIDE_ID_PREFIX };
+/** Client-facing pseudo job-id prefix for persisted guides ("saved:{id}"). */
+export const SAVED_GUIDE_ID_PREFIX = "saved:";
 
 /** On-disk envelope for one persisted guide. */
 export interface SavedGuideEnvelope {
