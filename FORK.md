@@ -56,6 +56,7 @@ These arrived with plannotator. Several are easy to mistake for our work.
 | **Comment threading** | `inReplyTo`, `packages/core/annotation-threads.ts`. |
 | **External annotations** | The API an agent writes findings and replies through. |
 | **Agent jobs** | The runner behind Guided Review, Code Tour, and agent review. |
+| **Versions panel** (document review) | The `Versions` tab, `CURRENT PLAN / Version n of m`, `COMPARE AGAINST v1..vn`, and the inline redline it renders. `packages/ui/components/sidebar/VersionBrowser.tsx` and `usePlanDiff.ts`, both untouched by this fork. It is easy to mistake for our review rounds (row 6): it does for a document what rounds are meant to do for code. |
 | **Since-base diff, Git status panel, Commits, call flow, semantic diff** | All upstream. |
 
 ## Removed from this fork
@@ -67,7 +68,7 @@ These arrived with plannotator. Several are easy to mistake for our work.
 ## Known gaps
 
 - **Rounds have no view.** Round 6 records data nothing reads yet.
-- **Markdown review records no rounds.** Only code review does; `packages/server/annotate.ts` is untouched.
+- **Markdown review records no rounds.** Only code review does; `packages/server/annotate.ts` is untouched. This matters less than it reads: upstream's Versions panel already shows a document against any earlier version, so the gap is real for code only.
 - **Only Python has a comment rule.** Every other language counts every changed line.
 - **A guide exported to guides.show still draws nothing.** The `ProseRenderer` slot is filled by the review app only; the portable viewer keeps the light renderer, because `guide-viewer` depends on `core` alone. A shared guide shows the diagram as source. Fixing that means a `core`-only markdown-plus-mermaid renderer.
 - **Diagrams are likely, not guaranteed.** Both prompts ask for a diagram when a chapter or a stop carries one of the named shapes, and the model still decides. Observed: one diagram in one run, none in the next on the same small changeset. Placement inside the prompt changed the outcome more than the wording did: the same instruction drew nothing while it sat inside the overview's "never as decoration" bullet list, and drew reliably once it moved to its own `#### Diagrams` section.
