@@ -115,7 +115,7 @@ agent's edits. See `adr/specs/review-rounds-20260904-143000.md`.
 3. The agent reads each thread. It answers the ones it reads as questions. It edits
    for the rest.
 4. The agent resolves only the threads it edited for. Every other thread stays open.
-5. The reviewer reads the answers, resolves them, and opens the since-review diff.
+5. The reviewer reads the answers and resolves them.
 
 ## Test first
 
