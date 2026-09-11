@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronsDownUp } from 'lucide-react';
 import type { GuideSection } from '@plannotator/core/guide';
 import type { DiffFile } from './types';
 import { renderMarkdownProse } from './renderMarkdownProse';
 import { useGuideHost } from './host';
 import { GuideFileCard } from './GuideFileCard';
+import { groupFilesByFolder } from './groupFilesByFolder';
 
 function Checkbox({ checked }: { checked: boolean }) {
   return (
@@ -137,6 +138,20 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapseSignal?.token]);
 
+  // Collapse every diff in this chapter to one row per file. Separate from the
+  // chapter collapse above: that hides the chapter, this keeps it open and
+  // turns the code into a list the reader can scan. One-line changes are the
+  // case that motivated it — a chapter of ten one-liners is ten screens of
+  // scrolling to learn what a list says at a glance.
+  const diffCollapseTokenRef = useRef(0);
+  const [diffCollapseSignal, setDiffCollapseSignal] = useState<{ collapsed: boolean; token: number } | null>(null);
+  const diffsCollapsed = diffCollapseSignal?.collapsed === true;
+  const handleToggleDiffs = () => {
+    diffCollapseTokenRef.current += 1;
+    setDiffCollapseSignal((current) => ({ collapsed: !(current?.collapsed === true), token: diffCollapseTokenRef.current }));
+  };
+  const folderGroups = useMemo(() => groupFilesByFolder(files), [files]);
+
   const handleToggleReviewed = () => {
     setCollapsedOverride(null);
     onToggleReviewed?.();
@@ -265,7 +280,58 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
         </div>
 
         <div className="min-w-0 space-y-4 bg-muted/[0.07] px-1.5 py-3 md:px-4 md:py-4">
-          {files.length > 0 ? (
+          {files.length > 1 && (
+            <div className="flex items-center justify-end px-1">
+              <button
+                type="button"
+                onClick={handleToggleDiffs}
+                className="flex items-center gap-1.5 rounded-md border border-border/50 bg-background px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                title={
+                  diffsCollapsed
+                    ? 'Open every diff in this chapter'
+                    : 'Collapse every diff in this chapter to one row per file, with its description'
+                }
+              >
+                <ChevronsDownUp className={diffsCollapsed ? 'rotate-180' : ''} size={11} />
+                {diffsCollapsed ? 'Expand diffs' : 'Collapse diffs'}
+              </button>
+            </div>
+          )}
+
+          {/* Collapsed, the chapter reads as a file list: one row per file with
+              its description, grouped by folder. That grouping answers what a
+              flat list cannot — how much of the chapter is one package, and how
+              much is scattered. Expanded, the folder headers would only
+              interrupt the code, so they render in the collapsed view alone. */}
+          {files.length > 0 && diffsCollapsed ? (
+            folderGroups.map((group) => (
+              <div key={group.folder || '<root>'} className="space-y-1.5">
+                <div className="flex items-center gap-2 px-1 pt-1">
+                  <span className="min-w-0 truncate font-mono text-[10.5px] text-muted-foreground/70">
+                    {group.folder || 'repository root'}
+                  </span>
+                  <span className="flex-shrink-0 text-[10px] text-muted-foreground/50">
+                    {group.files.length} file{group.files.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="ml-auto flex-shrink-0 font-mono text-[10px]">
+                    {group.additions > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{group.additions}</span>}
+                    {group.deletions > 0 && <span className="ml-1 text-red-600/80 dark:text-red-400/80">-{group.deletions}</span>}
+                  </span>
+                </div>
+                {group.files.map((file) => (
+                  <GuideFileCard
+                    key={file.path}
+                    file={file}
+                    summary={summaryByPath.get(file.path)}
+                    focused={focusedFile === file.path}
+                    revealTarget={targetBelongsHere}
+                    onActivate={onActivate}
+                    collapseSignal={diffCollapseSignal}
+                  />
+                ))}
+              </div>
+            ))
+          ) : files.length > 0 ? (
             files.map((file) => (
               <GuideFileCard
                 key={file.path}
@@ -274,6 +340,7 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
                 focused={focusedFile === file.path}
                 revealTarget={targetBelongsHere}
                 onActivate={onActivate}
+                collapseSignal={diffCollapseSignal}
               />
             ))
           ) : (

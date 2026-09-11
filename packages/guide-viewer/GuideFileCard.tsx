@@ -15,6 +15,10 @@ interface GuideFileCardProps {
   focused: boolean;
   revealTarget: { filePath: string; token: number } | null;
   onActivate: (filePath: string) => void;
+  /** Collapse or expand every diff in this chapter at once. The token
+   *  identifies one press, so a card applies each press once and the reader can
+   *  still open a single file afterwards without the chapter closing it again. */
+  collapseSignal?: { collapsed: boolean; token: number } | null;
 }
 
 /**
@@ -28,6 +32,7 @@ export const GuideFileCard: React.FC<GuideFileCardProps> = ({
   focused,
   revealTarget,
   onActivate,
+  collapseSignal,
 }) => {
   const { DiffRenderer, getDiffRendererProps } = useGuideHost();
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -54,6 +59,16 @@ export const GuideFileCard: React.FC<GuideFileCardProps> = ({
     // Token identifies the navigation event; callback identity must not replay it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.token]);
+
+  // Apply one chapter-level collapse press. A collapsed card still needs its
+  // CodeView mounted, because the collapsed row IS that renderer's file header.
+  useEffect(() => {
+    if (!collapseSignal) return;
+    setCollapsed(collapseSignal.collapsed);
+    if (collapseSignal.collapsed) requestMount();
+    // Token identifies one press; callback identity must not replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapseSignal?.token]);
 
   // Keyboard/sidebar focus may reach a file through a path that does not emit a
   // fresh guide reveal token. Ensure the focused shell is eligible to mount.
