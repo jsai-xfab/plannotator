@@ -541,10 +541,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <AllFilesRow
               active={isAllFilesActive}
               onClick={onSelectAllFiles}
-              // Source lines, not raw git lines: the total should describe the
-              // work a reviewer must read. See @plannotator/shared/source-lines.
-              additions={files.reduce((sum, file) => sum + file.sourceAdditions, 0)}
-              deletions={files.reduce((sum, file) => sum + file.sourceDeletions, 0)}
+              // EVERY changed line, because the file and folder rows below this
+              // one are counted the same way (`FileTreeNode` renders
+              // `file.additions`). A total in a different metric from the rows it
+              // sits above cannot be reconciled by the reviewer reading it.
+              // Source lines go to the tooltip instead.
+              additions={files.reduce((sum, file) => sum + file.additions, 0)}
+              deletions={files.reduce((sum, file) => sum + file.deletions, 0)}
+              sourceAdditions={files.reduce((sum, file) => sum + file.sourceAdditions, 0)}
+              sourceDeletions={files.reduce((sum, file) => sum + file.sourceDeletions, 0)}
             />
           )}
           {onToggleGeneratedFiles && (

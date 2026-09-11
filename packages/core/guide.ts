@@ -27,6 +27,19 @@ export interface GuideDiffRef {
   summary?: string;
 }
 
+/** A named part of one chapter: its own heading, prose, and diagram.
+ *
+ *  Deliberately optional and deliberately rare. A chapter with one idea stays
+ *  one chapter; the prompt names the three cases that earn a split. Present
+ *  only on guides generated after the fork added them, so every renderer must
+ *  treat an absent list as "this chapter has no parts", never as an error. */
+export interface GuideSubsection {
+  /** Concept-level heading for this part of the chapter. */
+  title: string;
+  /** Markdown prose for this part, diagram included. */
+  body: string;
+}
+
 export interface GuideSection {
   /** Concept-level title, e.g. "Payment localization module" — never a filename paraphrase. */
   title: string;
@@ -34,10 +47,29 @@ export interface GuideSection {
    *  Semantic order (core first, consequences next, glue grouped last) is
    *  carried by the array position, not by any label field. */
   overview: string;
+  /** Optional named parts of this chapter, rendered under the overview. The
+   *  overview stays the chapter's summary when they are present; a part
+   *  carries the detail. */
+  subsections?: GuideSubsection[];
   /** File references into the provided changeset. Usually 1..n, but a
    *  deliberate prose-only context section (no diffs, real overview text) is
    *  a valid model output and is preserved as-is rather than dropped. */
   diffs: GuideDiffRef[];
+}
+
+/** One hunk that looks like it does not belong in the changeset, on the
+ *  evidence of the code rather than the topic: code nothing calls, a leftover
+ *  from an abandoned approach, or a second mechanism for a job the first still
+ *  does.
+ *
+ *  An ANNOTATION on a file, never a placement. The file keeps its chapter, so
+ *  the coverage rule (every file in exactly one place) is untouched by this
+ *  list and `validateGuideOutput` does not consider it. */
+export interface GuideLooseEnd {
+  /** Repo-relative path; matches a DiffFile.path in the current review patch. */
+  file: string;
+  /** Why this looks out of place, in one or two plain sentences. */
+  note: string;
 }
 
 export interface CodeGuideOutput {
@@ -49,6 +81,9 @@ export interface CodeGuideOutput {
   sections: GuideSection[];
   /** Changed files the model didn't place — rendered in a trailing "Everything else" section. */
   unplacedFiles?: string[];
+  /** Hunks that look out of place on the evidence of the code — rendered in a
+   *  trailing "Loose ends" card. Absent and empty both render nothing. */
+  looseEnds?: GuideLooseEnd[];
 }
 
 /** One row of GET /api/guides — a persisted guide for the current repo

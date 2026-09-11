@@ -204,7 +204,10 @@ const SectionRow: React.FC<{
         <TruncatedPath path={file.path} />
         <AnnotationBadge count={annotationCount} />
       </div>
-      <DiffCounts additions={file.sourceAdditions} deletions={file.sourceDeletions} />
+      {/* Every changed line, the same metric as this panel's total and as the
+          file tree's rows. These counts are read against GitHub constantly, so
+          they follow git; the source-line figure lives on the total's tooltip. */}
+      <DiffCounts additions={file.additions} deletions={file.deletions} />
     </button>
   );
 };
@@ -446,10 +449,14 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
     });
   }, []);
 
-  // Source lines, not raw git lines: the total should describe the work a
-  // reviewer must read. See @plannotator/shared/source-lines.
-  const totalAdditions = files.reduce((sum, f) => sum + f.sourceAdditions, 0);
-  const totalDeletions = files.reduce((sum, f) => sum + f.sourceDeletions, 0);
+  // Every changed line, matching `git diff --stat`, GitHub, and the per-file rows
+  // in this panel. Source lines — comments and blanks excluded — are computed too
+  // and shown on hover: they answer "how much is there to READ", which is worth
+  // knowing and is not the number a reviewer cross-checks against GitHub.
+  const totalAdditions = files.reduce((sum, f) => sum + f.additions, 0);
+  const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
+  const sourceTotalAdditions = files.reduce((sum, f) => sum + f.sourceAdditions, 0);
+  const sourceTotalDeletions = files.reduce((sum, f) => sum + f.sourceDeletions, 0);
 
   const renderRows = (list: SectionItem[]) =>
     list.map((item) => (
@@ -605,6 +612,8 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
                 onClick={onSelectAllFiles}
                 additions={totalAdditions}
                 deletions={totalDeletions}
+                sourceAdditions={sourceTotalAdditions}
+                sourceDeletions={sourceTotalDeletions}
               />
             )}
             {onToggleGeneratedFiles && (

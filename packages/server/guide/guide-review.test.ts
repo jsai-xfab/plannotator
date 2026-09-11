@@ -152,6 +152,84 @@ describe("validateGuideOutput", () => {
     expect(result.guide.title).toBe("Guided review");
     expect(result.guide.intent).toBe("");
   });
+
+  it("keeps subsections, and omits the field for a chapter without them", () => {
+    const raw = JSON.parse(
+      guideJson([
+        {
+          title: "Split",
+          overview: "o",
+          subsections: [
+            { title: "Step one", body: "b1" },
+            { title: "Step two", body: "b2" },
+          ],
+          diffs: [{ file: "src/a.ts" }],
+        },
+        { title: "Whole", overview: "o", diffs: [{ file: "src/b.ts" }] },
+      ]),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.sections[0].subsections).toEqual([
+      { title: "Step one", body: "b1" },
+      { title: "Step two", body: "b2" },
+    ]);
+    expect(result.guide.sections[1].subsections).toBeUndefined();
+  });
+
+  it("drops a subsection with neither a title nor a body", () => {
+    const raw = JSON.parse(
+      guideJson([
+        {
+          title: "S",
+          overview: "o",
+          subsections: [{ title: "  ", body: "   " }, { title: "Real", body: "b" }],
+          diffs: [{ file: "src/a.ts" }],
+        },
+      ]),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.sections[0].subsections).toEqual([{ title: "Real", body: "b" }]);
+  });
+
+  it("keeps a loose end, and leaves the file in its chapter", () => {
+    const raw = JSON.parse(
+      guideJson([{ title: "S", overview: "o", diffs: [{ file: "src/a.ts" }] }], {
+        looseEnds: [{ file: "src/a.ts", note: "Nothing in this diff calls resolveLegacyKey." }],
+      }),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    // Annotation, not placement: coverage is unchanged by the loose end.
+    expect(result.guide.sections[0].diffs).toEqual([{ file: "src/a.ts" }]);
+    expect(result.guide.looseEnds).toEqual([
+      { file: "src/a.ts", note: "Nothing in this diff calls resolveLegacyKey." },
+    ]);
+    expect(result.guide.unplacedFiles).toEqual(["src/b.ts", "src/c.ts"]);
+  });
+
+  it("drops a loose end outside the changeset, or missing a note, without failing the guide", () => {
+    const raw = JSON.parse(
+      guideJson([{ title: "S", overview: "o", diffs: [{ file: "src/a.ts" }] }], {
+        looseEnds: [
+          { file: "not/changed.ts", note: "invented path" },
+          { file: "src/b.ts", note: "   " },
+          { file: "src/c.ts", note: "Two code paths now do this." },
+        ],
+      }),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.looseEnds).toEqual([{ file: "src/c.ts", note: "Two code paths now do this." }]);
+  });
+
+  it("omits looseEnds entirely when the model returns none", () => {
+    const raw = JSON.parse(guideJson([{ title: "S", overview: "o", diffs: [{ file: "src/a.ts" }] }]));
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.looseEnds).toBeUndefined();
+  });
 });
 
 describe("repairGuideJsonText", () => {

@@ -81,16 +81,41 @@ export function AllFilesRow({
   onClick,
   additions,
   deletions,
+  sourceAdditions,
+  sourceDeletions,
   afterLabel,
 }: {
   active: boolean;
   onClick: () => void;
+  /** EVERY changed line — the figure `git diff --stat` and GitHub report, and the
+   * one the per-file rows beneath this total are counted in. */
   additions: number;
   deletions: number;
+  /** Source lines only, comments and blanks excluded. Shown on hover, never as
+   * the headline. See `@plannotator/core/source-lines`. Optional. */
+  sourceAdditions?: number;
+  sourceDeletions?: number;
   /** Optional control rendered right after the label (e.g. the tree view's
    * expand/collapse-all-folders toggle). */
   afterLabel?: React.ReactNode;
 }) {
+  // **This total counts every changed line, and it has to.** It used to show
+  // SOURCE lines — comments and blanks excluded — while the file and folder rows
+  // directly beneath it showed raw lines. The rows therefore did not add up to
+  // their own total, and neither matched GitHub: one measured PR read +21163
+  // here against +39480 everywhere else, because 18k of its added lines were
+  // Python docstrings. A reviewer has no way to read that as a different METRIC
+  // rather than a diff that failed to load, and two numbers in one panel that
+  // cannot reconcile are worse than either number alone.
+  //
+  // Source lines are still worth knowing — a docstring rewrite is not a logic
+  // rewrite — so they moved to the tooltip, where they explain themselves.
+  const hasSource = typeof sourceAdditions === 'number' && typeof sourceDeletions === 'number';
+  const title = hasSource
+    ? `All changed lines: +${additions} −${deletions} — the figure git and GitHub report.\n`
+      + `Source lines only: +${sourceAdditions} −${sourceDeletions} (comments and blank lines excluded).`
+    : `All changed lines — the figure git and GitHub report.`;
+
   return (
     <SidebarActionRow active={active} onClick={onClick}>
       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -98,7 +123,7 @@ export function AllFilesRow({
       </svg>
       <span>All files</span>
       {afterLabel}
-      <span className="ml-auto text-[10px] tabular-nums opacity-60">
+      <span className="ml-auto text-[10px] tabular-nums opacity-60" title={title}>
         <span className="text-green-500">+{additions}</span>{' '}
         <span className="text-red-500">-{deletions}</span>
       </span>

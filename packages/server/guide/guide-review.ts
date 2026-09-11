@@ -22,7 +22,9 @@ import { GUIDE_EXTRA_INSTRUCTIONS_MAX_CHARS } from "@plannotator/shared/guide";
 import type {
   CodeGuideOutput,
   GuideDiffRef,
+  GuideLooseEnd,
   GuideSection,
+  GuideSubsection,
 } from "@plannotator/shared/guide";
 import type { GuideLaunchReview } from "@plannotator/shared/guide-format";
 
@@ -48,6 +50,18 @@ export const GUIDE_SCHEMA_JSON = JSON.stringify({
         properties: {
           title: { type: "string" },
           overview: { type: "string" },
+          subsections: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                body: { type: "string" },
+              },
+              required: ["title", "body"],
+              additionalProperties: false,
+            },
+          },
           diffs: {
             type: "array",
             items: {
@@ -68,6 +82,18 @@ export const GUIDE_SCHEMA_JSON = JSON.stringify({
     unplacedFiles: {
       type: "array",
       items: { type: "string" },
+    },
+    looseEnds: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          file: { type: "string" },
+          note: { type: "string" },
+        },
+        required: ["file", "note"],
+        additionalProperties: false,
+      },
     },
   },
   required: ["title", "intent", "sections", "unplacedFiles"],
@@ -223,6 +249,28 @@ never shares a chapter.
   - A markdown table when the section compares 3+ parallel things (before
     and after across several call sites, a set of flags and their effects).
 
+- **subsections**: OPTIONAL named parts of this chapter. Omit the field
+  entirely for most chapters. Each part has a \`title\` (a concept-level
+  heading, not "Part 2") and a \`body\` (markdown prose, its own diagram
+  included).
+
+  Use subsections ONLY when one of these is true:
+  1. The chapter holds more than one distinct STEP of one mechanism, and a
+     reader has to understand step one before step two makes sense.
+  2. Two files in the chapter play genuinely different roles, and one
+     explanation cannot serve both.
+  3. The chapter carries both a structure and a sequence, and each earns its
+     own diagram.
+
+  Use none otherwise. A chapter with one idea is one chapter, and splitting it
+  makes the guide longer without making it clearer. If most of your chapters
+  have subsections, you have split chapters that should have stayed whole, or
+  you have written chapters that should have been separate chapters.
+
+  When a chapter has subsections, the \`overview\` becomes the chapter's
+  SUMMARY: what this chapter is, why it exists, and what the parts are. The
+  detail moves into the parts. Do not repeat the overview in the first part.
+
 #### Diagrams
 
 A fenced \`\`\`mermaid block inside an overview renders as a picture. Draw one
@@ -325,6 +373,43 @@ This should be rare for a well-scoped changeset; do not use it as a dumping
 ground to avoid writing an overview. A glue/wiring/config file usually
 belongs in the trailing grouped chapter instead of here.
 
+### looseEnds
+Hunks that look like they do not belong, judged on the CODE and never on the
+topic. Each entry is a \`file\` and a \`note\` of one or two plain sentences
+saying what looks out of place and why.
+
+Three triggers, and only these three:
+1. **Code nothing calls.** The change adds or keeps a function, branch, field,
+   flag, or file that nothing in the diff calls, and nothing in the files you
+   read calls.
+2. **A leftover from an abandoned approach.** The change starts one way and
+   finishes another, and the first way is still in the tree: a half-built
+   abstraction the final code goes around, a parameter every caller now passes
+   the same value for, a compatibility shim for a shape the change deletes.
+3. **Two mechanisms for one job.** The change adds a second way to do
+   something the first way still does, and does not delete the first.
+
+This is NOT a topic check. A file that is unrelated to the pull request's
+subject but is correct, wanted, and used is not a loose end; that is what
+unplacedFiles and the trailing glue chapter are for. Judge whether the code
+belongs in the TREE, not whether it belongs in the TICKET.
+
+This is NOT a bug hunt. Do not go looking for defects, style problems,
+missing tests, or things you would have done differently. A loose end
+answers one question: "why is this here at all?"
+
+Rules:
+- Every \`file\` must be a path from the changeset, spelled exactly.
+- A file in looseEnds KEEPS its chapter. This list annotates a file; it never
+  places one. Never move a file out of its section because you listed it here.
+- State it plainly and stop. Do not argue, do not prescribe a fix, do not
+  hedge with "consider whether". The reviewer decides.
+- Say what you actually saw. "Nothing in this diff calls \`resolveLegacyKey\`"
+  is a fact the reader can check. "This looks unnecessary" is not.
+- Most changesets have NONE. Return an empty array, or omit the field. An
+  empty looseEnds is the expected result and is never a sign you did not look
+  hard enough. Two or three is a lot. Never pad it.
+
 ## Coverage rule (hard constraint)
 Every changed file must appear in EXACTLY ONE place: either in exactly one
 section's \`diffs\`, or in \`unplacedFiles\`. Never both. Never twice across
@@ -351,6 +436,9 @@ accounted for.
 - Diagrams do not count toward the sentence budget. A section about a call
   path, a type relationship, a branching process, a lifecycle, or a data
   shape gets a diagram.
+- Subsections: most chapters have none. A chapter with subsections has 2-4,
+  never one. Each body is 3-8 sentences and usually carries a diagram.
+- looseEnds: usually empty. Never more than about three.
 
 ## Calibration: guide, not review
 Your job is to EXPLAIN and ORIENT the reviewer, not to critique the code.
@@ -361,6 +449,12 @@ something that looks like a real bug while reading, mention it briefly in
 the relevant section's overview, but do not go looking for problems, and do
 not let critique crowd out explanation. Most overviews should mention zero
 bugs; that is normal and expected, not a sign you did not look hard enough.
+
+\`looseEnds\` is the ONE exception, and it is not a findings list either. It
+answers "why is this here at all?", which is orientation: a reader cannot tell
+from a diff whether a function is new and unused because the next commit uses
+it, or because it is a leftover. Record what you saw and stop there. Every
+other kind of critique stays out of the guide.
 
 ## Pipeline
 1. Read the full diff (inlined, or ONE diff command: git diff / jj diff)
@@ -380,10 +474,18 @@ bugs; that is normal and expected, not a sign you did not look hard enough.
    path, types, branching process, lifecycle, data shape. Draw the diagram
    for every shape you find, using real names from the diff. A section that
    carries none needs none.
-8. Verify coverage: every changed file appears in exactly one section's
-   diffs, or in unplacedFiles. Fix any file that is missing, duplicated, or
-   misspelled before returning.
-9. Return structured JSON matching the schema.`;
+8. For each chapter, ask whether it needs subsections. Most do not. Split one
+   only for a distinct second step, a genuinely different file role, or a
+   second diagram that earns its own heading.
+9. Ask what looks out of place on the evidence of the code: something nothing
+   calls, a leftover from an abandoned approach, a second mechanism for a job
+   the first still does. Record those in looseEnds. Finding none is the
+   normal result.
+10. Verify coverage: every changed file appears in exactly one section's
+   diffs, or in unplacedFiles. A file named in looseEnds keeps its chapter and
+   does not count as a second placement. Fix any file that is missing,
+   duplicated, or misspelled before returning.
+11. Return structured JSON matching the schema.`;
 
 /**
  * The guide methodology, optionally extended with reviewer-supplied extra
@@ -673,6 +775,12 @@ Schema:
     section changes a call path (\`sequenceDiagram\`), a type relationship
     (\`classDiagram\`), a branching process (\`flowchart TD\`), a lifecycle
     (\`stateDiagram-v2\`), or a data shape (\`erDiagram\`)
+  - subsections: OPTIONAL array of objects, each with a \`title\` (concept-level
+    heading) and a \`body\` (markdown prose with its own diagram). Omit the
+    field for most chapters. Use 2-4 parts only when the chapter holds a
+    distinct second step, two files in genuinely different roles, or two
+    diagrams that each earn a heading. When present, the overview becomes the
+    chapter summary and the parts carry the detail
   - diffs: array of objects, each with two fields:
     - file: string — the EXACT repo-relative path as it appears in the diff or
       the Changed files list; never invented, abbreviated, or re-cased
@@ -681,9 +789,17 @@ Schema:
       change does, not which lines it touches; never a repeat of the overview
 - unplacedFiles: array of strings, always present — changed files that don't
   belong in any section; use an empty array when every changed file is placed
+- looseEnds: OPTIONAL array of objects, each with a \`file\` (an exact path
+  from the changeset) and a \`note\` (1-2 plain sentences). Record a hunk that
+  looks like it does not belong ON THE EVIDENCE OF THE CODE: something nothing
+  in the diff calls, a leftover from an approach this branch abandoned, or a
+  second mechanism for a job the first one still does. Not a topic check and
+  not a bug hunt. A file listed here KEEPS its chapter. Most changesets have
+  none; an empty array is the expected answer
 
 Every changed file must appear in EXACTLY ONE place: either in exactly one
 section's diffs, or in unplacedFiles. Never both, never twice, never omitted.
+A file named in looseEnds is annotated, not placed, and does not count here.
 If no section fits a file, prefer a trailing grouped glue/wiring/config
 chapter over dumping it in unplacedFiles.`;
 }
@@ -912,6 +1028,18 @@ function sanitizeGuideSection(raw: unknown): GuideSection | null {
           return summary ? { file: d.file, summary } : { file: d.file };
         })
     : [];
+  // Subsections are optional and rare. A part with no title and no body is
+  // dropped; an empty list is dropped entirely, so a chapter without parts is
+  // byte-identical to one generated before subsections existed.
+  const subsections: GuideSubsection[] = Array.isArray(s.subsections)
+    ? s.subsections
+        .filter((p): p is Record<string, unknown> => !!p && typeof p === "object")
+        .map((p) => ({
+          title: typeof p.title === "string" ? p.title.trim() : "",
+          body: typeof p.body === "string" ? p.body : "",
+        }))
+        .filter((p) => p.title.length > 0 || p.body.trim().length > 0)
+    : [];
   if (title.trim().length === 0 && overview.trim().length === 0 && diffs.length === 0) return null;
   // Every surviving section gets a non-empty title: a diffs-only section
   // (blank title AND overview) used to render as a blank chapter with a
@@ -919,7 +1047,12 @@ function sanitizeGuideSection(raw: unknown): GuideSection | null {
   // Keeping the section (titled) beats dropping it: its files were PLACED by
   // the model, so they're not in unplacedFiles and dropping would silently
   // orphan them from the guide's coverage story.
-  return { title: title.trim() ? title : "Untitled section", overview, diffs };
+  return {
+    title: title.trim() ? title : "Untitled section",
+    overview,
+    ...(subsections.length > 0 && { subsections }),
+    diffs,
+  };
 }
 
 /** Sanitizes a raw sections array (see `sanitizeGuideSection`). Shared by the
@@ -939,6 +1072,24 @@ function sanitizeGuideSections(raw: unknown): GuideSection[] {
 /** Sanitizes the model-provided `unplacedFiles` array to a plain string[]. */
 function sanitizeUnplacedFiles(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((f): f is string => typeof f === "string") : [];
+}
+
+/** Sanitizes the model-provided `looseEnds` array. Entries without both a path
+ *  and a note are dropped: a note with no file cannot be shown next to
+ *  anything, and a file with no note says nothing. The caller drops entries
+ *  whose path is not in the changeset. */
+function sanitizeLooseEnds(raw: unknown): GuideLooseEnd[] {
+  if (!Array.isArray(raw)) return [];
+  const out: GuideLooseEnd[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    const file = typeof entry.file === "string" ? entry.file.trim() : "";
+    const note = typeof entry.note === "string" ? entry.note.trim() : "";
+    if (file.length === 0 || note.length === 0) continue;
+    out.push({ file, note });
+  }
+  return out;
 }
 
 export function parseGuideStreamOutput(stdout: string): CodeGuideOutput | null {
@@ -1223,6 +1374,12 @@ export function validateGuideOutput(raw: unknown, changedFiles: string[]): { gui
   }
   const unplacedFiles = [...unplacedSet];
 
+  // A loose end annotates a file; it never places one, so it takes no part in
+  // the coverage rule above. Entries naming a path outside the changeset are
+  // dropped rather than failing the guide: an invented path is the model's
+  // mistake, and it must not cost the reviewer a valid guide.
+  const looseEnds = sanitizeLooseEnds(output.looseEnds).filter((entry) => changedSet.has(entry.file));
+
   const guide: CodeGuideOutput = {
     // Marker engines are prompt-enforced only (no schema flag) — a non-string
     // title/intent would otherwise reach the client verbatim and crash
@@ -1232,6 +1389,7 @@ export function validateGuideOutput(raw: unknown, changedFiles: string[]): { gui
     intent: typeof output.intent === "string" ? output.intent : "",
     sections: validatedSections,
     ...(unplacedFiles.length > 0 && { unplacedFiles }),
+    ...(looseEnds.length > 0 && { looseEnds }),
   };
 
   return { guide };
