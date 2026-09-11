@@ -32,6 +32,13 @@ Everything below serves one of those two problems.
 | 9 | **Guided Review chapters render diagrams, and the prompt asks for them.** The guide chain gained a `ProseRenderer` slot on its host contract: the review app supplies the full renderer, the portable guides.show export keeps the light one and its `core`-only dependency. The prompt names five shapes a chapter can carry, and asks for the matching diagram: call path (`sequenceDiagram`), types (`classDiagram`), branching process (`flowchart`), lifecycle (`stateDiagram-v2`), data shape (`erDiagram`). Chapter prose also grew from 2-6 sentences to 4-10. | `packages/guide-viewer/host.tsx`, `GuideSectionCard.tsx`, `ReviewGuideHost.tsx`, `packages/server/guide/guide-review.ts` |
 | 10 | **The file tree stays open during a guide, and lights the current chapter.** Upstream hides the tree in the takeover. Where a chapter's files sit in the repository is itself information — one cohesive package or four scattered ones — and the guide's own list cannot show it. The chapter is derived from the focused file and reported through the same host seam. | `packages/guide-viewer/host.tsx`, `GuideView.tsx`, `FileTreeNode.tsx`, `App.tsx` |
 
+| 11 | **A chapter can have sub-chapters.** `GuideSection.subsections`: named parts with their own heading, prose, and diagram. Deliberately rare — the prompt names three triggers and says to use none otherwise, because a chapter with one idea is one chapter. A chapter without parts renders exactly as before. | `packages/core/guide.ts`, `packages/server/guide/guide-review.ts`, `GuideSectionCard.tsx` |
+| 12 | **Loose ends.** The guide says when a hunk looks like it does not belong, judged on the code and never on the topic: code nothing calls, a leftover from an approach the branch abandoned, a second mechanism for a job the first still does. Rendered in one trailing card. An annotation on a file, never a placement, so the coverage rule is untouched. Usually empty. | `packages/core/guide.ts`, `packages/server/guide/guide-review.ts`, `GuideView.tsx` |
+| 13 | **The tree filters to the chapter.** One row beside the generated-files row hides every file outside the chapter being read. Off by default: the surrounding tree is the shape the highlight is read against. Row-level filtering, never on the `files` array, because `fileIndex` is a position in it. | `ChapterFilterRow.tsx`, `FileTreeNode.tsx`, `SectionsPanel.tsx` |
+| 14 | **Collapse all.** One control in the guide header collapses every chapter to show the whole breakdown, and expands them again. Chapter collapse state moved from each card up to `GuideView`, driven by a token so a card keeps its own toggle afterwards. | `GuideView.tsx`, `GuideSectionCard.tsx` |
+| 15 | **Refine a guide.** The reader says what to change about the organization, and a new guide job starts with the current guide as its starting point. It never edits in place, so a refinement that fails validation costs nothing. The previous guide rides its own launch field, not `instructions` — that is a standing preference, capped and persisted for every future guide. | `GuideRefineButton.tsx`, `GuideScreen.tsx`, `packages/server/guide/guide-review.ts` |
+| 16 | **Custom instructions are visible.** Upstream collapses the launch screen's instructions box behind a quiet disclosure; a reader who wanted to steer a guide reported that no such box existed. It now opens by default. | `GuideEmptyState.tsx` |
+
 ### The cost of row 8
 
 The code review bundle grew **17.63 MB → 21.90 MB (+24%,** gzip 5.6 → 6.9 MB) because
@@ -73,6 +80,8 @@ These arrived with plannotator. Several are easy to mistake for our work.
 - **Only the guide prompt names all five diagram shapes.** The tour prompt still names three: structure, sequence, and branching lifecycle.
 - **Tour anchors still land on the file, not the line.** `TourDiffAnchor` carries `line` and `end_line`, and `onAnchorClick` passes only `anchor.file`. There is no line-reveal primitive — the guide reveal channel is `{ path, token }` — so this needs new plumbing.
 - **Code Tour is still a modal.** It should be a center dock panel, beside the diff rather than covering it.
+- **Sub-chapters and loose ends are prompt-driven, so they are not guaranteed.** The schema carries them and the renderer draws them; whether a given guide uses them is the model's call. Both are meant to be rare, so an empty result is usually correct rather than a failure.
+- **A refinement re-reads the whole diff.** It is a fresh organize pass with the previous guide as a starting point, not an edit, so it costs a full guide run. That is the price of keeping the coverage rule enforceable on the result.
 
 ## Working on this fork
 
@@ -87,7 +96,7 @@ Before claiming a regression, compare the failing-test **set** against
 `upstream/main`, not the count. The suite has a large pre-existing failure set
 in this environment (live proxies, port binding).
 
-Two traps this fork has already hit twice:
+Three traps this fork has already hit:
 
 1. **`packages/review-editor` reaches core through `@plannotator/shared/*`.** The
    vite build has no `@plannotator/core` alias. A new core module needs its
@@ -96,3 +105,12 @@ Two traps this fork has already hit twice:
 2. **`guide-store` is node-bound.** Importing it into the review app pulls `fs`
    and `path` into the browser bundle. Browser-safe constants belong in
    `packages/core/guide.ts`.
+3. **Build order matters: review first, then hook.** `build:hook` ends with
+   `cp ../review/dist/index.html dist/review.html`, so it copies whatever the
+   review build left behind. Running `build:hook` first serves a stale review
+   bundle, and the app looks exactly as if the change never happened.
+
+Keep the diff against upstream as small as the change allows. Upstream releases
+weekly, and every upstream line this fork rewrites is a line that has to be
+merged by hand later. Add a row, a prop, or a component; do not restructure a
+function to hold a new parameter.
