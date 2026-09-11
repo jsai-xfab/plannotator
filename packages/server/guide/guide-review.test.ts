@@ -224,6 +224,44 @@ describe("validateGuideOutput", () => {
     expect(result.guide.looseEnds).toEqual([{ file: "src/c.ts", note: "Two code paths now do this." }]);
   });
 
+  it("keeps an outlier that names a file the chapter kept", () => {
+    const raw = JSON.parse(
+      guideJson([
+        {
+          title: "S",
+          overview: "o",
+          diffs: [{ file: "src/a.ts" }, { file: "src/b.ts" }],
+          outliers: [{ file: "src/b.ts", note: "Drive-by fix; belongs to the viewer work." }],
+        },
+      ]),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.sections[0].outliers).toEqual([
+      { file: "src/b.ts", note: "Drive-by fix; belongs to the viewer work." },
+    ]);
+  });
+
+  it("drops an outlier naming a file this chapter lost to an earlier placement", () => {
+    // A note pointing at a file the reader cannot see in this chapter
+    // describes a grouping that is not on screen.
+    const raw = JSON.parse(
+      guideJson([
+        { title: "One", overview: "o", diffs: [{ file: "src/a.ts" }] },
+        {
+          title: "Two",
+          overview: "o",
+          diffs: [{ file: "src/a.ts" }, { file: "src/b.ts" }],
+          outliers: [{ file: "src/a.ts", note: "lost to section one" }],
+        },
+      ]),
+    );
+    const result = validateGuideOutput(raw, FILES);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.guide.sections[1].diffs).toEqual([{ file: "src/b.ts" }]);
+    expect(result.guide.sections[1].outliers).toBeUndefined();
+  });
+
   it("omits looseEnds entirely when the model returns none", () => {
     const raw = JSON.parse(guideJson([{ title: "S", overview: "o", diffs: [{ file: "src/a.ts" }] }]));
     const result = validateGuideOutput(raw, FILES);

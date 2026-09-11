@@ -23,6 +23,7 @@ import type {
   CodeGuideOutput,
   GuideDiffRef,
   GuideLooseEnd,
+  GuideOutlier,
   GuideSection,
   GuideSubsection,
 } from "@plannotator/shared/guide";
@@ -59,6 +60,18 @@ export const GUIDE_SCHEMA_JSON = JSON.stringify({
                 body: { type: "string" },
               },
               required: ["title", "body"],
+              additionalProperties: false,
+            },
+          },
+          outliers: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                file: { type: "string" },
+                note: { type: "string" },
+              },
+              required: ["file", "note"],
               additionalProperties: false,
             },
           },
@@ -200,10 +213,18 @@ have already seen everything that matters most up to that point:
    more.
 
 #### How to CHUNK sections
-A section is a logical unit of change, not a file and not a folder. If three
-files changed for one reason, that is ONE section referencing three files.
-If one file has two unrelated changes, split it into two sections. Never
-default to one-section-per-file; let the logic of the change decide.
+A section is ONE CONNECTED SET OF FILES: files that call each other, share a
+type, or must change together for one reason to hold. That connection is the
+test. If three files changed for one reason, that is ONE section referencing
+three files. If one file has two unrelated changes, split it into two sections.
+Never default to one-section-per-file; let the logic of the change decide.
+
+A chapter the reader cannot hold in their head is not a chapter. If a candidate
+section runs past roughly 15 files, ask whether its files are really one
+connected set. Usually they are two or three sets that share a folder, and they
+should become separate chapters. Where they genuinely are one set, give the
+chapter sub-chapters (see "Sub-chapters") so the reader gets a heading per
+part rather than one block of prose for forty files.
 
 Chapters follow the natural fault lines of the work: when a changeset
 carries more than one distinct piece of work (two features, or a feature
@@ -249,35 +270,72 @@ never shares a chapter.
   - A markdown table when the section compares 3+ parallel things (before
     and after across several call sites, a set of flags and their effects).
 
-- **subsections**: OPTIONAL named parts of this chapter. Omit the field
-  entirely for most chapters. Each part has a \`title\` (a concept-level
-  heading, not "Part 2") and a \`body\` (markdown prose, its own diagram
-  included).
+- **subsections**: named parts of this chapter. See "Sub-chapters" below.
 
-  Use subsections ONLY when one of these is true:
-  1. The chapter holds more than one distinct STEP of one mechanism, and a
-     reader has to understand step one before step two makes sense.
-  2. Two files in the chapter play genuinely different roles, and one
-     explanation cannot serve both.
-  3. The chapter carries both a structure and a sequence, and each earns its
-     own diagram.
+- **outliers**: OPTIONAL. Files you placed in this chapter that do not really
+  belong to it. Each entry is a \`file\` (a path from this chapter's own
+  \`diffs\`) and a \`note\` of one or two sentences saying why it sits here and
+  what it actually relates to.
 
-  Use none otherwise. A chapter with one idea is one chapter, and splitting it
-  makes the guide longer without making it clearer. If most of your chapters
-  have subsections, you have split chapters that should have stayed whole, or
-  you have written chapters that should have been separate chapters.
+  Every changed file must land in exactly one chapter, so a file with nowhere
+  natural to go still lands somewhere. The chapter title then implies a
+  connection the reader will hunt for and not find. Say it instead: "this file
+  is here because it changed in the same commit; it belongs to the viewer work,
+  which this changeset does not otherwise touch."
 
-  When a chapter has subsections, the \`overview\` becomes the chapter's
-  SUMMARY: what this chapter is, why it exists, and what the parts are. The
-  detail moves into the parts. Do not repeat the overview in the first part.
+  Use it when a file rides along for a reason outside the chapter's story: a
+  drive-by fix, a rename that caught this file, a change to a shared helper
+  that this chapter happens to own. Most chapters have none. Never list more
+  than two or three; a chapter with four outliers is a chapter that was cut
+  wrong, so re-cut it instead.
+
+#### Sub-chapters
+
+A chapter with more than one idea in it splits into \`subsections\`: an array of
+\`{ title, body }\`. The title is a concept-level heading, never "Part 2". The
+body is markdown prose with its own diagram.
+
+**Size is the first trigger, and it is not subtle.** Count the chapter's files:
+
+- **1 to 6 files**: usually no parts. One idea, one chapter.
+- **7 to 15 files**: parts if the chapter holds more than one step, or more
+  than one role. Look hard; most chapters this size do.
+- **More than 15 files**: parts, or the chapter is really several chapters.
+  Decide which, and do it. A 40-file chapter with one block of prose tells the
+  reader almost nothing about 40 files.
+
+Split on meaning, not on count. The three meanings that earn a part:
+
+1. **A distinct step of one mechanism.** The reader has to understand step one
+   before step two makes sense.
+2. **A different role.** Two files in the chapter do genuinely different jobs,
+   and one explanation cannot serve both: the type that declares a thing, and
+   the call sites that consume it.
+3. **A second diagram.** The chapter carries both a structure and a sequence,
+   and each earns its own heading.
+
+Use 2 to 5 parts. One part is not a split; rewrite it as prose. More than five
+means the chapter should have been several chapters.
+
+When a chapter has parts, the \`overview\` becomes the chapter SUMMARY: what
+this chapter is, why it exists, and what the parts are, in 3-5 sentences. The
+detail moves into the parts. Never repeat the overview in the first part.
+
+Each part's body is 3-8 sentences and usually carries a diagram.
 
 #### Diagrams
 
-A fenced \`\`\`mermaid block inside an overview renders as a picture. Draw one
-in EVERY section that introduces or reshapes any of the five shapes below. For
-these a picture is the clearest form available, and prose alone under-serves
-the reader. This is the expected default for a section that carries real work,
-not a flourish you add when you have time.
+A fenced \`\`\`mermaid block inside an overview renders as a picture.
+
+**Every chapter that changes code gets at least one diagram.** Not most
+chapters: every one. A chapter with parts draws one per part wherever the part
+carries its own shape. The only chapters that draw nothing are the trailing
+glue chapter and a chapter that is purely prose or configuration.
+
+Treat "I cannot think of a diagram for this chapter" as a signal that you have
+not yet worked out what the chapter does, not as permission to skip it. Every
+code change has a shape: something calls something, something holds something,
+something decides between two paths. Find it and draw it.
 
 Pick the shape by what the section actually changes:
 
@@ -297,12 +355,13 @@ Pick the shape by what the section actually changes:
 5. **Data shape** — a schema migration, a new table or collection, a changed
    relation between records. Use \`erDiagram\`.
 
-Skip a diagram for a rename, an import bump, a config change, a copy edit, or
-anything one sentence settles. Skip it in the trailing glue chapter.
+Skip a diagram only in the trailing glue chapter, or for a chapter that is
+nothing but renames, import bumps, config keys and copy edits.
 
-At most two diagrams per section, and a second one only when the section
-genuinely carries two of the five shapes (for example a new type AND the call
-path that uses it). Two diagrams of the same shape belong in one diagram.
+A chapter may carry SEVERAL diagrams: one in the overview and one per part.
+Draw a second where the chapter genuinely holds a second shape, for example a
+new type AND the call path that uses it. Two diagrams of the same shape belong
+in one diagram.
 
 Rules for every diagram:
 
@@ -373,6 +432,16 @@ This should be rare for a well-scoped changeset; do not use it as a dumping
 ground to avoid writing an overview. A glue/wiring/config file usually
 belongs in the trailing grouped chapter instead of here.
 
+**On a large changeset this is the failure to watch for.** Placing 200 files
+and leaving 1000 unplaced is not a guide; it is a guide of one fifth of the
+change with the rest swept into a bucket the reader still has to read alone.
+Before you return, compare the number of files you placed against the number
+changed. If most of the changeset is unplaced, you wrote too few chapters:
+go back and add them until the bulk of the change sits in a named chapter
+with an explanation. Add chapters for whole areas you passed over. Reserve
+unplacedFiles for genuine noise, and keep it to a small fraction of the
+changeset.
+
 ### looseEnds
 Hunks that look like they do not belong, judged on the CODE and never on the
 topic. Each entry is a \`file\` and a \`note\` of one or two plain sentences
@@ -422,8 +491,14 @@ accounted for.
   list. Never invented, never abbreviated, never re-cased.
 - A file appears in exactly one section, or in unplacedFiles. Never twice,
   never neither.
-- Typically 2-6 sections. Never more than 10. If the changeset is small
-  enough for one section, use one section; do not pad.
+- Section count scales with the changeset. Count the changed files first:
+  - up to 20 files: 2-6 sections
+  - 20 to 100 files: 6-12 sections
+  - 100 to 400 files: 12-20 sections
+  - more than 400 files: 20-30 sections
+  If the changeset is small enough for one section, use one section; do not
+  pad. On a large changeset the opposite failure is the real one: too few
+  chapters, each too big to read, with most of the files left unplaced.
 - Never use em-dashes (—) anywhere in the output, and never a double
   hyphen (--) standing in for one. Use commas, colons, or separate
   sentences instead.
@@ -436,8 +511,9 @@ accounted for.
 - Diagrams do not count toward the sentence budget. A section about a call
   path, a type relationship, a branching process, a lifecycle, or a data
   shape gets a diagram.
-- Subsections: most chapters have none. A chapter with subsections has 2-4,
-  never one. Each body is 3-8 sentences and usually carries a diagram.
+- Subsections: 2-5 parts, driven by the size and meaning rules above. Each
+  body is 3-8 sentences and usually carries a diagram.
+- Outliers: most chapters have none; never more than two or three.
 - looseEnds: usually empty. Never more than about three.
 
 ## Calibration: guide, not review
@@ -474,18 +550,22 @@ other kind of critique stays out of the guide.
    path, types, branching process, lifecycle, data shape. Draw the diagram
    for every shape you find, using real names from the diff. A section that
    carries none needs none.
-8. For each chapter, ask whether it needs subsections. Most do not. Split one
-   only for a distinct second step, a genuinely different file role, or a
-   second diagram that earns its own heading.
+8. For each chapter, count its files. Over 15 means sub-chapters, or the
+   chapter is really several chapters; decide which and do it. Between 7 and
+   15, look for a distinct second step or a different file role. Then name any
+   file that rides along without belonging, in that chapter's outliers.
 9. Ask what looks out of place on the evidence of the code: something nothing
    calls, a leftover from an abandoned approach, a second mechanism for a job
    the first still does. Record those in looseEnds. Finding none is the
    normal result.
 10. Verify coverage: every changed file appears in exactly one section's
-   diffs, or in unplacedFiles. A file named in looseEnds keeps its chapter and
-   does not count as a second placement. Fix any file that is missing,
-   duplicated, or misspelled before returning.
-11. Return structured JSON matching the schema.`;
+   diffs, or in unplacedFiles. A file named in looseEnds or outliers keeps its
+   chapter and does not count as a second placement. Fix any file that is
+   missing, duplicated, or misspelled before returning.
+11. Count what you placed against what changed. If most of the changeset is in
+   unplacedFiles, you wrote too few chapters. Add chapters for the areas you
+   passed over, then verify coverage again.
+12. Return structured JSON matching the schema.`;
 
 /**
  * The guide methodology, optionally extended with reviewer-supplied extra
@@ -828,12 +908,15 @@ Schema:
     section changes a call path (\`sequenceDiagram\`), a type relationship
     (\`classDiagram\`), a branching process (\`flowchart TD\`), a lifecycle
     (\`stateDiagram-v2\`), or a data shape (\`erDiagram\`)
-  - subsections: OPTIONAL array of objects, each with a \`title\` (concept-level
-    heading) and a \`body\` (markdown prose with its own diagram). Omit the
-    field for most chapters. Use 2-4 parts only when the chapter holds a
-    distinct second step, two files in genuinely different roles, or two
-    diagrams that each earn a heading. When present, the overview becomes the
-    chapter summary and the parts carry the detail
+  - subsections: array of objects, each with a \`title\` (concept-level heading)
+    and a \`body\` (markdown prose with its own diagram). Use 2-5 parts whenever
+    the chapter holds more than one idea; a chapter over 15 files almost always
+    does. When present, the overview becomes the chapter summary in 3-5
+    sentences and the parts carry the detail
+  - outliers: OPTIONAL array of objects, each with a \`file\` (a path from this
+    chapter's own diffs) and a \`note\` (1-2 sentences). Names a file that rides
+    along in this chapter without belonging to its story, so the reader stops
+    hunting for a connection that is not there. Most chapters have none
   - diffs: array of objects, each with two fields:
     - file: string — the EXACT repo-relative path as it appears in the diff or
       the Changed files list; never invented, abbreviated, or re-cased
@@ -1100,10 +1183,16 @@ function sanitizeGuideSection(raw: unknown): GuideSection | null {
   // Keeping the section (titled) beats dropping it: its files were PLACED by
   // the model, so they're not in unplacedFiles and dropping would silently
   // orphan them from the guide's coverage story.
+  // Outliers name a file this chapter took in without really owning it. The
+  // caller drops any whose path is not in the chapter's own diffs, so the note
+  // can never point at a file the reader cannot see here.
+  const outliers = sanitizeFileNotes(s.outliers);
+
   return {
     title: title.trim() ? title : "Untitled section",
     overview,
     ...(subsections.length > 0 && { subsections }),
+    ...(outliers.length > 0 && { outliers }),
     diffs,
   };
 }
@@ -1127,11 +1216,32 @@ function sanitizeUnplacedFiles(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((f): f is string => typeof f === "string") : [];
 }
 
-/** Sanitizes the model-provided `looseEnds` array. Entries without both a path
- *  and a note are dropped: a note with no file cannot be shown next to
- *  anything, and a file with no note says nothing. The caller drops entries
- *  whose path is not in the changeset. */
-function sanitizeLooseEnds(raw: unknown): GuideLooseEnd[] {
+/**
+ * The section as validated: its surviving diffs, and only the outliers that
+ * name a file it actually kept.
+ *
+ * A note pointing at a file the reader cannot see in this chapter is worse
+ * than no note: it describes a grouping that is not on screen. Validation can
+ * move a file out of a chapter (a duplicate reference loses to the first
+ * placement), so the check runs against the SURVIVING diffs.
+ *
+ * Rebuilds the object rather than spreading over it. Spreading kept the
+ * model's original array whenever the scoped list came back empty, which is
+ * precisely the case that had to drop.
+ */
+function validatedSection(section: GuideSection, diffs: GuideDiffRef[]): GuideSection {
+  const { outliers, ...rest } = section;
+  if (!outliers || outliers.length === 0) return { ...rest, diffs };
+  const here = new Set(diffs.map((ref) => ref.file));
+  const kept = outliers.filter((entry) => here.has(entry.file));
+  return kept.length > 0 ? { ...rest, diffs, outliers: kept } : { ...rest, diffs };
+}
+
+/** Sanitizes a model-provided `{ file, note }` array — `looseEnds` on the guide
+ *  and `outliers` on a section. Entries without both a path and a note are
+ *  dropped: a note with no file cannot be shown next to anything, and a file
+ *  with no note says nothing. Each caller decides which paths are in scope. */
+function sanitizeFileNotes(raw: unknown): GuideLooseEnd[] {
   if (!Array.isArray(raw)) return [];
   const out: GuideLooseEnd[] = [];
   for (const item of raw) {
@@ -1389,12 +1499,13 @@ export function validateGuideOutput(raw: unknown, changedFiles: string[]): { gui
       // real overview text. A section that LOST all its diffs to
       // validation above is dropped, not kept empty.
       if (originalDiffCount === 0 && section.overview.trim().length > 0) {
-        validatedSections.push({ ...section, diffs });
+        // A prose-only section has no files, so it can own no outliers.
+        validatedSections.push(validatedSection(section, diffs));
       }
       continue;
     }
 
-    validatedSections.push({ ...section, diffs });
+    validatedSections.push(validatedSection(section, diffs));
   }
 
   if (validatedSections.length === 0) {
@@ -1431,7 +1542,7 @@ export function validateGuideOutput(raw: unknown, changedFiles: string[]): { gui
   // the coverage rule above. Entries naming a path outside the changeset are
   // dropped rather than failing the guide: an invented path is the model's
   // mistake, and it must not cost the reviewer a valid guide.
-  const looseEnds = sanitizeLooseEnds(output.looseEnds).filter((entry) => changedSet.has(entry.file));
+  const looseEnds = sanitizeFileNotes(output.looseEnds).filter((entry) => changedSet.has(entry.file));
 
   const guide: CodeGuideOutput = {
     // Marker engines are prompt-enforced only (no schema flag) — a non-string

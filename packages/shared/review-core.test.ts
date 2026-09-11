@@ -27,6 +27,7 @@ import {
   getWorkingTreeDiffFromBase,
   gitAddFile,
   gitResetFile,
+  excludePatchFiles,
   isBinaryPatchFile,
   isSameCwdCommitSwitch,
   listPatchFiles,
@@ -1842,5 +1843,62 @@ describe("commit diff mode", () => {
 
     const after = await getGitDiffFingerprint(runtime, `commit:${rootSha}` as DiffType, "main");
     expect(after).toBe(before);
+  });
+});
+
+describe("excludePatchFiles", () => {
+  // An agent reads the patch, not the file tree, so a generated file hidden
+  // from the reviewer is still in front of the agent unless it is cut here.
+  const patch = [
+    "diff --git a/src/app.ts b/src/app.ts",
+    "index 111..222 100644",
+    "--- a/src/app.ts",
+    "+++ b/src/app.ts",
+    "@@ -1,2 +1,3 @@",
+    " keep",
+    "+added",
+    "diff --git a/bun.lock b/bun.lock",
+    "index 333..444 100644",
+    "--- a/bun.lock",
+    "+++ b/bun.lock",
+    "@@ -1,2 +1,3 @@",
+    " lock",
+    "+noise",
+    "diff --git a/docs/readme.md b/docs/readme.md",
+    "index 555..666 100644",
+    "--- a/docs/readme.md",
+    "+++ b/docs/readme.md",
+    "@@ -1,1 +1,2 @@",
+    "+prose",
+    "",
+  ].join("\n");
+
+  test("drops only the named files and keeps every other chunk whole", () => {
+    const filtered = excludePatchFiles(patch, new Set(["bun.lock"]));
+
+    expect(filtered).not.toContain("bun.lock");
+    expect(filtered).not.toContain("+noise");
+    expect(filtered).toContain("a/src/app.ts");
+    expect(filtered).toContain("+added");
+    expect(filtered).toContain("a/docs/readme.md");
+    // Still a patch the next parser can read.
+    expect(listPatchFiles(filtered).map((f) => f.path)).toEqual(["src/app.ts", "docs/readme.md"]);
+  });
+
+  test("returns the patch untouched for an empty set", () => {
+    expect(excludePatchFiles(patch, new Set())).toBe(patch);
+  });
+
+  test("names a dropped file the same way listPatchFiles does", () => {
+    // The two must agree, or the changed-file list and the patch disagree
+    // about which files the agent was given.
+    const all = listPatchFiles(patch).map((f) => f.path);
+    const filtered = excludePatchFiles(patch, new Set(all));
+    expect(filtered.trim()).toBe("");
+  });
+
+  test("keeps a chunk whose path cannot be read", () => {
+    const odd = "diff --git\n@@ -1 +1 @@\n+x\n";
+    expect(excludePatchFiles(odd, new Set(["anything"]))).toBe(odd);
   });
 });

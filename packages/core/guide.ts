@@ -58,10 +58,29 @@ export interface GuideSection {
    *  overview stays the chapter's summary when they are present; a part
    *  carries the detail. */
   subsections?: GuideSubsection[];
+  /** Files placed in this chapter that do not cleanly belong to it. The
+   *  coverage rule forces every file into exactly one chapter, so a file with
+   *  nowhere natural to go still lands somewhere; this says so out loud
+   *  instead of letting the grouping imply a connection that is not there. */
+  outliers?: GuideOutlier[];
   /** File references into the provided changeset. Usually 1..n, but a
    *  deliberate prose-only context section (no diffs, real overview text) is
    *  a valid model output and is preserved as-is rather than dropped. */
   diffs: GuideDiffRef[];
+}
+
+/** One file grouped into a chapter it does not really belong to.
+ *
+ *  Distinct from a loose end: a loose end doubts the CODE, an outlier doubts
+ *  the GROUPING. The coverage rule forces every changed file into exactly one
+ *  chapter, so a file with nowhere natural to go lands somewhere anyway. The
+ *  chapter then implies a connection the reader cannot find. This says so out
+ *  loud, which is cheaper than the reader hunting for the link. */
+export interface GuideOutlier {
+  /** Repo-relative path; matches a DiffFile.path in the current review patch. */
+  file: string;
+  /** Why it sits here and what it really belongs to, in one or two sentences. */
+  note: string;
 }
 
 /** One hunk that looks like it does not belong in the changeset, on the

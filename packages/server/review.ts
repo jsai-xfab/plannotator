@@ -23,6 +23,7 @@ import {
   getSinceBaseSections,
   detectRemoteDefaultInfo,
   isBinaryPatchFile,
+  excludePatchFiles,
   listPatchFiles,
   type PatchFileStats,
   type RemoteDefaultInfo,
@@ -1187,6 +1188,37 @@ export async function startReviewServer(
       // that read would silently break it.
       const launchLayerPatchIncomplete = layerPatchIncomplete;
 
+      /**
+       * The patch every agent reads: `launchPatch` with `linguist-generated`
+       * files removed.
+       *
+       * The file tree already hides them, but an agent reads the patch, not the
+       * tree. Handing over the unfiltered diff spends the agent's context on
+       * lockfiles and vendored trees and invites a chapter about them, which is
+       * exactly what the source-only review exists to prevent. One computation
+       * serves Guided Review, Code Tour and agent review, so no surface can
+       * drift back to the unfiltered patch.
+       *
+       * Best-effort and fail-open: detection that throws, or that would leave
+       * an empty patch, keeps the original. An unreadable `.gitattributes` must
+       * never cost the reviewer a review.
+       */
+      let launchSourcePatch = launchPatch;
+      let launchGeneratedFiles: Set<string> | null = null;
+      try {
+        const generated = await buildGeneratedFilesSidecar(launchPatch, launchDiffType as string);
+        if (generated && generated.length > 0) {
+          const hidden = new Set(generated);
+          const filtered = excludePatchFiles(launchPatch, hidden);
+          if (filtered.trim().length > 0) {
+            launchSourcePatch = filtered;
+            launchGeneratedFiles = hidden;
+          }
+        }
+      } catch {
+        // Keep the unfiltered patch.
+      }
+
       const requestedProfileId =
         typeof config?.reviewProfileId === "string" ? config.reviewProfileId : undefined;
       // Resolve the requested review, or throw a clear error. An unresolvable
@@ -1253,7 +1285,7 @@ export async function startReviewServer(
       if (provider === "tour") {
         const built = await tour.buildCommand({
           cwd,
-          patch: launchPatch,
+          patch: launchSourcePatch,
           diffType: launchDiffType as DiffType,
           options: userMessageOptions,
           prMetadata: launchMetadata,
@@ -1271,7 +1303,7 @@ export async function startReviewServer(
         // whatever patch/diff/base the reviewer has switched to by the time
         // the job finishes — a mid-generation diff/base switch would
         // otherwise invalidate every ref in an otherwise-valid guide.
-        let changedFiles = listPatchFiles(launchPatch);
+        let changedFiles = listPatchFiles(launchSourcePatch);
         // Very large PRs: the platform API withholds per-file patches
         // (layerPatchIncomplete) — but the PR-mode prompt tells the agent to
         // read the FULL local diff (git diff origin/<base>...HEAD in the
@@ -1334,24 +1366,15 @@ export async function startReviewServer(
           }
         }
 
-        // A walkthrough that spends a chapter on a lockfile repeats the problem
-        // the source-only diff exists to solve, so the guide plans against
-        // source files only. Filtering here covers both the launch patch and
-        // the recomputed list above, and it is presentation-side: the diff data
-        // itself is untouched, and a reviewer showing generated files does not
-        // regenerate the guide (guideContext records what it was built against).
-        // Every file dropping out would leave the guide nothing to describe, so
-        // that case keeps the full list rather than failing the job.
-        try {
-          const generated = await buildGeneratedFilesSidecar(launchPatch, currentDiffType as string);
-          if (generated && generated.length > 0) {
-            const hidden = new Set(generated);
-            const sourceOnly = changedFiles.filter((f) => !hidden.has(f.path));
-            if (sourceOnly.length > 0) changedFiles = sourceOnly;
-          }
-        } catch {
-          // Generated detection is best-effort; an unreadable .gitattributes
-          // must not stop a guide from being generated.
+        // The launch patch is already source-only (launchSourcePatch), so the
+        // list derived from it is too. The RECOMPUTED list above is not: it
+        // comes from `git diff --numstat`, which knows nothing of
+        // `.gitattributes`. Filter that case with the set already resolved,
+        // rather than detecting a second time. Every file dropping out would
+        // leave the guide nothing to describe, so that keeps the full list.
+        if (launchGeneratedFiles) {
+          const sourceOnly = changedFiles.filter((f) => !launchGeneratedFiles.has(f.path));
+          if (sourceOnly.length > 0) changedFiles = sourceOnly;
         }
 
         const repairOf = typeof config?.repairOf === "string" ? config.repairOf : undefined;
@@ -1392,7 +1415,7 @@ export async function startReviewServer(
 
         const built = await guide.buildCommand({
           cwd,
-          patch: launchPatch,
+          patch: launchSourcePatch,
           diffType: launchDiffType as DiffType,
           options: userMessageOptions,
           prMetadata: launchMetadata,
@@ -1477,10 +1500,10 @@ export async function startReviewServer(
       const userMessage = workspacePrompt
         ? buildAgentReviewUserMessageForTarget({
             kind: "workspace",
-            patch: launchPatch,
+            patch: launchSourcePatch,
             workspace: workspacePrompt,
           }, isCustomReview)
-        : buildAgentReviewUserMessage(launchPatch, launchDiffType as DiffType, userMessageOptions, launchMetadata, isCustomReview);
+        : buildAgentReviewUserMessage(launchSourcePatch, launchDiffType as DiffType, userMessageOptions, launchMetadata, isCustomReview);
       const jobLabel = workspacePrompt ? "Workspace Review" : "Code Review";
 
       if (provider === "codex") {

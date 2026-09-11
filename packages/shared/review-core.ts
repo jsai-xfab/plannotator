@@ -2432,6 +2432,53 @@ export function listPatchFiles(patch: string): PatchFileStats[] {
   return files;
 }
 
+/**
+ * Remove whole files from a unified diff.
+ *
+ * The reviewer's file tree already drops files marked `linguist-generated`, but
+ * an agent reads the PATCH, not the tree. Handing it the unfiltered diff means
+ * a lockfile and a vendored tree still cost context and still invite a chapter,
+ * which is the problem the source-only review exists to solve. Every agent
+ * provider filters here before the patch becomes a prompt.
+ *
+ * Splits on `diff --git` exactly as `listPatchFiles` does, so a file this drops
+ * is a file that list would have named. Resolves each chunk's path the same way
+ * too, which matters for a rename: the chunk carries both names and the NEW
+ * name is what the generated set holds.
+ *
+ * Returns the patch unchanged when `paths` is empty, and returns an empty
+ * string only when the caller asked to drop every file in it.
+ */
+export function excludePatchFiles(patch: string, paths: Set<string>): string {
+  if (!patch || paths.size === 0) return patch;
+
+  const chunkStarts = [...patch.matchAll(/^diff --git /gm)];
+  if (chunkStarts.length === 0) return patch;
+
+  const kept: string[] = [];
+  // Anything before the first chunk (a git-format-patch header, say) is not a
+  // file and is never dropped.
+  const preamble = patch.slice(0, chunkStarts[0].index ?? 0);
+
+  for (let i = 0; i < chunkStarts.length; i++) {
+    const start = chunkStarts[i].index ?? 0;
+    const end = chunkStarts[i + 1]?.index ?? patch.length;
+    const chunk = patch.slice(start, end);
+    const lines = chunk.split("\n");
+
+    const { oldPath: bodyOldPath, newPath: bodyNewPath } = parseDiffFilePathLines(lines);
+    const headerPaths = parseDiffGitHeader(lines[0] ?? "");
+    const path = bodyNewPath ?? bodyOldPath ?? headerPaths.newPath ?? headerPaths.oldPath;
+
+    // A chunk whose path cannot be read is kept: dropping a file we could not
+    // name would silently remove a change nobody asked to hide.
+    if (path && paths.has(path)) continue;
+    kept.push(chunk);
+  }
+
+  return preamble + kept.join("");
+}
+
 /** Whether the named file's patch chunk contains a Git binary marker. */
 export function isBinaryPatchFile(patch: string, filePath: string): boolean {
   const chunkStarts = [...patch.matchAll(/^diff --git /gm)];

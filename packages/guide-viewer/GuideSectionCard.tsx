@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronsDownUp } from 'lucide-react';
+import { ChevronDown, ChevronsDownUp, Maximize2, Minimize2 } from 'lucide-react';
 import type { GuideSection } from '@plannotator/core/guide';
 import type { DiffFile } from './types';
 import { renderMarkdownProse } from './renderMarkdownProse';
@@ -143,6 +143,9 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
   // turns the code into a list the reader can scan. One-line changes are the
   // case that motivated it — a chapter of ten one-liners is ten screens of
   // scrolling to learn what a list says at a glance.
+  // Give the explanation the whole card. Per chapter and not remembered: it is
+  // a reading posture for the chapter in front of the reader, not a setting.
+  const [proseWide, setProseWide] = useState(false);
   const diffCollapseTokenRef = useRef(0);
   const [diffCollapseSignal, setDiffCollapseSignal] = useState<{ collapsed: boolean; token: number } | null>(null);
   const diffsCollapsed = diffCollapseSignal?.collapsed === true;
@@ -194,13 +197,29 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
   return (
     <div ref={cardRef} className="scroll-mt-4 overflow-clip rounded-lg border border-border/50 bg-card">
       {/* Stacked below md; a proportional chapter column on tablets; the fixed 440px column from lg up (desktop unchanged). */}
-      <div className="md:grid md:grid-cols-[minmax(260px,36%)_minmax(0,1fr)] lg:grid-cols-[440px_minmax(0,1fr)]">
-        <div className="border-b border-border/40 md:border-b-0 md:border-r">
-          <div className="px-4 py-4 md:sticky md:top-0 md:flex md:max-h-[calc(100dvh-48px)] md:flex-col md:overflow-y-auto md:overflow-x-hidden md:px-6 md:py-5">
+      {/* Widened, the prose takes the whole card and the diffs move below it.
+          A 440px column is a column for file names, not for an explanation with
+          a diagram in it: the diagram shrinks to fit and the prose breaks every
+          few words. */}
+      <div className={proseWide ? '' : 'md:grid md:grid-cols-[minmax(260px,36%)_minmax(0,1fr)] lg:grid-cols-[440px_minmax(0,1fr)]'}>
+        <div className={proseWide ? 'border-b border-border/40' : 'border-b border-border/40 md:border-b-0 md:border-r'}>
+          <div className={proseWide
+            ? 'px-4 py-4 md:px-6 md:py-5'
+            : 'px-4 py-4 md:sticky md:top-0 md:flex md:max-h-[calc(100dvh-48px)] md:flex-col md:overflow-y-auto md:overflow-x-hidden md:px-6 md:py-5'}>
             <div className="flex items-start gap-2 md:flex-none">
               <h3 className="flex-1 text-[15px] font-semibold leading-snug text-foreground [text-wrap:balance]">
                 {section.title}
               </h3>
+              <button
+                type="button"
+                onClick={() => setProseWide((wide) => !wide)}
+                className="mt-0.5 flex-shrink-0 rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground relative pointer-coarse:before:absolute pointer-coarse:before:-inset-3.5 pointer-coarse:before:content-['']"
+                title={proseWide ? 'Put the explanation back beside the diffs' : 'Widen the explanation to the full card'}
+                aria-label={proseWide ? 'Narrow the explanation' : 'Widen the explanation'}
+                aria-pressed={proseWide}
+              >
+                {proseWide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
               <button
                 type="button"
                 onClick={() => setCollapsedOverride(true)}
@@ -259,6 +278,23 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
                     )}
                   </section>
                 ))}
+              </div>
+            )}
+
+            {/* Files this chapter took in without owning. Said out loud so the
+                reader stops looking for a connection to the chapter's story. */}
+            {section.outliers && section.outliers.length > 0 && (
+              <div className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/[0.05] px-2.5 py-2">
+                <p className="text-[11px] font-medium text-foreground/80">Here, but not really part of this</p>
+                <ul className="mt-1.5 space-y-1.5">
+                  {section.outliers.map((entry, entryIndex) => (
+                    <li key={`${entry.file}:${entryIndex}`} className="text-[11.5px] leading-relaxed text-muted-foreground">
+                      <span className="font-mono text-[10.5px] text-foreground/70">{entry.file}</span>
+                      {' — '}
+                      {entry.note}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
