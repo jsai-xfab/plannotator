@@ -61,6 +61,48 @@ describe("POST /api/agents/jobs — reviewProfileId launch plumbing", () => {
     handler.killAll();
   });
 
+  test("forwards refine into buildCommand config for a guide launch", async () => {
+    let seenConfig: Record<string, unknown> | undefined;
+    const handler = createAgentJobHandler({
+      mode: "review",
+      getServerUrl: () => "http://localhost:1234",
+      getCwd: () => "/tmp",
+      async buildCommand(_provider, config) {
+        seenConfig = config;
+        return { command: ["true"] };
+      },
+    });
+
+    const refine = { ask: "split chapter 3", guide: { title: "T", sections: [] } };
+    const res = await handler.handle(post({ provider: "guide", refine }), JOBS_URL);
+
+    expect(res?.status).toBe(201);
+    expect(seenConfig?.refine).toEqual(refine);
+    handler.killAll();
+  });
+
+  test("drops refine for a provider that is not the guide", async () => {
+    let seenConfig: Record<string, unknown> | undefined;
+    const handler = createAgentJobHandler({
+      mode: "review",
+      getServerUrl: () => "http://localhost:1234",
+      getCwd: () => "/tmp",
+      async buildCommand(_provider, config) {
+        seenConfig = config;
+        return { command: ["true"] };
+      },
+    });
+
+    const res = await handler.handle(
+      post({ provider: "codex", refine: { ask: "x", guide: {} } }),
+      JOBS_URL,
+    );
+
+    expect(res?.status).toBe(201);
+    expect(seenConfig?.refine).toBeUndefined();
+    handler.killAll();
+  });
+
   test("rejects unknown fields with 400", async () => {
     const handler = createAgentJobHandler({
       mode: "review",

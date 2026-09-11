@@ -631,7 +631,7 @@ export function createAgentJobHandler(options: AgentJobHandlerOptions): AgentJob
           const KNOWN_JOB_FIELDS = new Set([
             "provider", "command", "label",
             "engine", "model", "reasoningEffort", "effort", "thinking", "fastMode",
-            "reviewProfileId", "repairOf", "instructions",
+            "reviewProfileId", "repairOf", "instructions", "refine",
           ]);
           if (body && typeof body === "object") {
             const unknown = Object.keys(body).filter((k) => !KNOWN_JOB_FIELDS.has(k));
@@ -712,6 +712,12 @@ export function createAgentJobHandler(options: AgentJobHandlerOptions): AgentJob
               ? resolveGuideLaunchInstructions(body.instructions)
               : undefined;
             if (launchInstructions !== undefined) config.instructions = launchInstructions;
+            // Refine an existing guide: the guide on the reader's screen plus
+            // the one change they asked for. Guide launches only; the provider
+            // decides what to do with it (buildGuideRefineBlock).
+            if (provider === "guide" && body.refine && typeof body.refine === "object") {
+              config.refine = body.refine;
+            }
             const built = await options.buildCommand(provider, Object.keys(config).length > 0 ? config : undefined);
             if (built) {
               command = built.command;

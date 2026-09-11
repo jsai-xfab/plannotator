@@ -165,7 +165,7 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
           <span className="flex-shrink-0 text-[11px] text-muted-foreground/60">
             {section.diffs.length} diff{section.diffs.length !== 1 ? 's' : ''}
             {section.subsections && section.subsections.length > 0
-              ? ` · ${section.subsections.length} parts`
+              ? ` · ${section.subsections.length} part${section.subsections.length !== 1 ? 's' : ''}`
               : ''}
             {reviewed ? ' · reviewed' : ''}
           </span>
