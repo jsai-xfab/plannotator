@@ -196,13 +196,17 @@ export const GuideEmptyState: React.FC<GuideEmptyStateProps> = ({ capabilities, 
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
-  // Extra instructions (#1265): a quiet, collapsed-by-default disclosure below
-  // the Model defaults card. Persisted via its own cookie (write-through on
-  // every edit) so a standing team preference never needs retyping; launches
-  // read the persisted value fresh (useGuideLaunch.buildParams), so this local
-  // state is only the textarea's view of it.
+  // Extra instructions (#1265): a disclosure below the Model defaults card.
+  // Persisted via its own cookie (write-through on every edit) so a standing
+  // team preference never needs retyping; launches read the persisted value
+  // fresh (useGuideLaunch.buildParams), so this local state is only the
+  // textarea's view of it.
+  //
+  // Open by default in this fork. Collapsed, in muted 11.5px text, it read as
+  // decoration: a reader who wanted to steer a guide reported that no such box
+  // existed. A control nobody finds is a control nobody has.
   const [instructions, setInstructions] = useState('');
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
   const hasInstructions = instructions.trim().length > 0;
   // Server-stored (#1265, GET/PUT /api/agents/guide-instructions): the text
   // is consumed by the server at launch time, and a data-dir file has none
@@ -505,7 +509,7 @@ export const GuideEmptyState: React.FC<GuideEmptyStateProps> = ({ capabilities, 
               className="flex items-center gap-1 rounded-md px-1 py-1 text-[11.5px] text-muted-foreground/70 transition-colors hover:text-foreground"
             >
               <ChevronRight className={`transition-transform ${showInstructions ? 'rotate-90' : ''}`} size={12} />
-              Custom instructions
+              Custom instructions for this guide
               {hasInstructions && !showInstructions && (
                 <span className="ml-1 rounded border border-border/50 bg-muted/40 px-1 py-px font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60">
                   on
@@ -520,7 +524,7 @@ export const GuideEmptyState: React.FC<GuideEmptyStateProps> = ({ capabilities, 
                   maxLength={GUIDE_EXTRA_INSTRUCTIONS_MAX_CHARS}
                   rows={3}
                   spellCheck={false}
-                  placeholder={'Standing preferences for guide generation, e.g. "prefer product vocabulary over internal codenames".'}
+                  placeholder={'Tell the guide what to do, e.g. "break the auth work into its own chapters", "draw a sequence diagram for every request path", "prefer product vocabulary over internal codenames".'}
                   className="w-full resize-y rounded-md border border-border/50 bg-background p-2.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-border"
                 />
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground/60">

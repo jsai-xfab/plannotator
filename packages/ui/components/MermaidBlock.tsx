@@ -127,7 +127,7 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
 /**
  * Renders a mermaid diagram block with zoom controls.
  */
-const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
+const MermaidBlockImpl: React.FC<{ block: Block; alwaysShowControls?: boolean }> = ({ block, alwaysShowControls = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const expandedOverlayRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState('');
@@ -491,7 +491,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
 
   const controls = (
     /* Controls container */
-    <div className={`absolute top-2 right-2 flex flex-col gap-1 items-center z-10 ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+    <div className={`absolute top-2 right-2 flex flex-col gap-1 items-center z-10 ${isExpanded || alwaysShowControls ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
       {/* Toggle source/diagram button */}
       <button
         onClick={() => setShowSource(!showSource)}
@@ -636,5 +636,6 @@ export const MermaidBlock = React.memo(
   MermaidBlockImpl,
   (prev, next) =>
     prev.block.id === next.block.id &&
-    prev.block.content === next.block.content,
+    prev.block.content === next.block.content &&
+    prev.alwaysShowControls === next.alwaysShowControls,
 );

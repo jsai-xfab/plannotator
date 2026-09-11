@@ -10,6 +10,7 @@ import { BaseBranchPicker } from './BaseBranchPicker';
 import { PanelViewToggle } from './PanelViewToggle';
 import { SemanticDiffRow, CallFlowRow, AllFilesRow } from './PanelNavRows';
 import { GeneratedFilesRow } from './GeneratedFilesRow';
+import { ChapterFilterRow } from './ChapterFilterRow';
 import { PanelControlsRow, PanelSearchField } from './PanelChrome';
 import {
   ViewedControl,
@@ -52,6 +53,12 @@ interface SectionsPanelProps {
   /** File currently visible while scrolling the all-files surface — soft
    * highlight (same treatment as the tree view). */
   scrollHighlightIndex?: number;
+  /** Files of the guide chapter being read — highlighted while a guide is open. */
+  chapterFiles?: Set<string>;
+  /** True when the panel shows only `chapterFiles`. */
+  chapterOnly?: boolean;
+  /** Omit to hide the chapter-filter row (e.g. no guide open). */
+  onToggleChapterOnly?: () => void;
   onSelectFile: (index: number) => void;
   onDoubleClickFile?: (index: number) => void;
   /** j/k/arrows/Home/End file navigation (disabled while modals are open). */
@@ -140,6 +147,9 @@ const SectionRow: React.FC<{
   item: SectionItem;
   isActive: boolean;
   isScrollActive: boolean;
+  /** Row belongs to the guide chapter being read. Marks a SET of rows, which
+   *  is why it is kept separate from active and scroll-active. */
+  isInChapter: boolean;
   isViewed: boolean;
   annotationCount: number;
   onSelect: () => void;
@@ -158,6 +168,7 @@ const SectionRow: React.FC<{
   item,
   isActive,
   isScrollActive,
+  isInChapter,
   isViewed,
   annotationCount,
   onSelect,
@@ -182,7 +193,8 @@ const SectionRow: React.FC<{
     <button
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
-      className={`file-tree-item w-full text-left group ${isActive ? 'active' : isScrollActive ? 'scroll-active' : ''} ${annotationCount > 0 ? 'has-annotations' : ''}`}
+      className={`file-tree-item w-full text-left group ${isActive ? 'active' : isScrollActive ? 'scroll-active' : ''} ${annotationCount > 0 ? 'has-annotations' : ''} ${isInChapter ? 'in-chapter' : ''}`}
+      data-in-chapter={isInChapter ? 'true' : undefined}
       style={{ paddingLeft: 8 }}
       title={file.path}
     >
@@ -218,6 +230,9 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
   width,
   activeFileIndex,
   scrollHighlightIndex,
+  chapterFiles,
+  chapterOnly = false,
+  onToggleChapterOnly,
   onSelectFile,
   onDoubleClickFile,
   enableKeyboardNav,
@@ -289,6 +304,10 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
     };
     files.forEach((file, index) => {
       if (hideViewedFiles && viewedFiles.has(file.path) && index !== activeFileIndex) return;
+      // Chapter filter. The active row always survives, the same exception the
+      // viewed filter above makes: hiding the row the reader is on reads as a
+      // bug, not as a filter.
+      if (chapterOnly && chapterFiles && !chapterFiles.has(file.path) && index !== activeFileIndex) return;
       const entry = sections.files[file.path];
       // A file in the composite patch with no status entry has a clean
       // working tree — it is committed branch work.
@@ -315,7 +334,7 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
     // Staged work floats to the top of Changes.
     grouped.changes.sort((a, b) => Number(b.staged) - Number(a.staged));
     return grouped;
-  }, [files, sections, hideViewedFiles, viewedFiles, activeFileIndex, stagedFiles]);
+  }, [files, sections, hideViewedFiles, viewedFiles, activeFileIndex, stagedFiles, chapterOnly, chapterFiles]);
 
   const annotationCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -467,6 +486,7 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
         isScrollActive={
           item.index !== activeFileIndex && scrollHighlightIndex != null && item.index === scrollHighlightIndex
         }
+        isInChapter={chapterFiles?.has(item.file.path) === true}
         isViewed={viewedFiles.has(item.file.path)}
         annotationCount={annotationCounts.get(item.file.path) ?? 0}
         onSelect={() => onSelectFile(item.index)}
@@ -621,6 +641,13 @@ export const SectionsPanel: React.FC<SectionsPanelProps> = ({
                 hiddenCount={generatedFileCount ?? 0}
                 showing={showGeneratedFiles === true}
                 onToggle={onToggleGeneratedFiles}
+              />
+            )}
+            {onToggleChapterOnly && (
+              <ChapterFilterRow
+                chapterFileCount={chapterFiles?.size ?? 0}
+                filtering={chapterOnly}
+                onToggle={onToggleChapterOnly}
               />
             )}
             {panelControls}

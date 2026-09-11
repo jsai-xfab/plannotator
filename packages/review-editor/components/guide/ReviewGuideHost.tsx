@@ -18,6 +18,10 @@ const GuideProse: React.FC<{ markdown: string; tone?: 'foreground' | 'muted' }> 
   <RenderedMarkdown
     markdown={markdown}
     className={tone === 'muted' ? 'md-compact text-muted-foreground' : 'md-compact'}
+    // The chapter column is 440px on desktop, which is narrower than any
+    // useful sequence diagram. Enlarging is the normal way to read one here,
+    // so the control must be visible rather than waiting for a hover.
+    alwaysShowDiagramControls
   />
 );
 

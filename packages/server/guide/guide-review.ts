@@ -18,7 +18,7 @@ import {
   type MarkerEngine,
   type MarkerEngineId,
 } from "../marker-review";
-import { GUIDE_EXTRA_INSTRUCTIONS_MAX_CHARS } from "@plannotator/shared/guide";
+import { GUIDE_EXTRA_INSTRUCTIONS_MAX_CHARS, GUIDE_REFINE_ASK_MAX_CHARS } from "@plannotator/shared/guide";
 import type {
   CodeGuideOutput,
   GuideDiffRef,
@@ -537,6 +537,59 @@ function buildChangedFilesBlock(changedFiles?: GuideChangedFile[]): string[] {
     "",
     "Changed files (plan section placement against this exact file set; diffs[].file must match one of these paths verbatim):",
     ...changedFiles.map((f) => `${f.path} (+${f.additions}/-${f.deletions})`),
+  ];
+}
+
+/**
+ * The starting-point block for a refinement: the guide the reader is looking
+ * at, plus the change they asked for.
+ *
+ * A refinement is a fresh organize pass with a head start, never an edit of
+ * the previous guide. The coverage rule, the diagram rules, and the schema all
+ * still apply to the result, which is why this block says to keep what the ask
+ * does not touch rather than to patch the JSON.
+ *
+ * Returns [] when there is nothing to refine, so the normal prompt is
+ * byte-identical to what it was before refinement existed.
+ */
+function buildGuideRefineBlock(refine?: { ask: string; guide: unknown }): string[] {
+  if (!refine) return [];
+  const ask = typeof refine.ask === "string" ? refine.ask.trim().slice(0, GUIDE_REFINE_ASK_MAX_CHARS) : "";
+  if (ask.length === 0) return [];
+  let previous: string;
+  try {
+    previous = JSON.stringify(refine.guide, null, 2);
+  } catch {
+    return [];
+  }
+  if (!previous || previous === "null") return [];
+  return [
+    "",
+    "## Refine an existing guide",
+    "",
+    "A guide for this exact changeset already exists. It is below. The reviewer",
+    "read it and asked for one change to how it is organized:",
+    "",
+    `> ${ask.split("\n").join("\n> ")}`,
+    "",
+    "Produce a NEW complete guide for the same changeset. Rules:",
+    "- Do what the reviewer asked. That instruction outranks your own judgment",
+    "  about the right chapter size or order.",
+    "- KEEP everything the ask does not touch. A chapter the reviewer said",
+    "  nothing about keeps its title, its prose, its diagrams, and its files.",
+    "  Do not rewrite prose for style, and do not reorder chapters the ask did",
+    "  not mention.",
+    "- Every rule above still applies to the result: the coverage rule, the",
+    "  diagram rules, the subsection triggers, and the output schema. A",
+    "  refinement that drops a file is a failed refinement.",
+    "- Return the whole guide, not a patch and not a description of what you",
+    "  changed.",
+    "",
+    "The existing guide:",
+    "",
+    "```json",
+    previous,
+    "```",
   ];
 }
 
@@ -1521,7 +1574,19 @@ export function createGuideSession(): GuideSession {
           ? config.instructions
           : undefined;
 
-      const userMessage = buildGuideUserMessage(patch, diffType, options, prMetadata, changedFiles);
+      // A refinement is the normal organize prompt with a starting point
+      // appended: same diff, same rules, plus the previous guide and the one
+      // change the reviewer asked for. Appended here rather than inside
+      // buildGuideUserMessage because that function has five return paths and
+      // the block is identical on all of them.
+      const refineBlock = buildGuideRefineBlock(
+        config?.refine && typeof config.refine === "object"
+          ? (config.refine as { ask: string; guide: unknown })
+          : undefined,
+      );
+      const userMessage =
+        buildGuideUserMessage(patch, diffType, options, prMetadata, changedFiles) +
+        (refineBlock.length > 0 ? "\n" + refineBlock.join("\n") : "");
 
       // Marker engines (Cursor, OpenCode, Pi) — none has a schema flag, so the
       // guide contract's marker-delimited JSON block (composeGuideMarkerPrompt)

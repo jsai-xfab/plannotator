@@ -14,6 +14,8 @@ import { GuideSectionSkeleton } from '@plannotator/guide-viewer/GuideSkeleton';
 import { GuideView } from '@plannotator/guide-viewer/GuideView';
 import { ReviewGuideHost } from './ReviewGuideHost';
 import { GuideExportButton } from './GuideExportButton';
+import { GuideRefineButton } from './GuideRefineButton';
+import type { CodeGuideOutput } from '@plannotator/shared/guide';
 
 interface GuideScreenProps {
   /** Latest completed guide job id (or the demo guide id in standalone mode).
@@ -226,6 +228,14 @@ function ActiveGuide({
   // hint (#1112) — same params GuideEmptyState's Generate button would send.
   const guideLaunch = useGuideLaunch(capabilities);
   const [regenerating, setRegenerating] = useState(false);
+  // Refine reuses the regenerate path: the same engine params, plus the guide
+  // on screen and the reviewer's sentence. It launches a NEW job rather than
+  // mutating this one, so a refinement that fails validation costs the reader
+  // nothing — the guide they are reading is still here.
+  const handleRefine = async (ask: string, current: CodeGuideOutput) => {
+    if (!guideLaunch.canLaunch) return;
+    await launchJob({ ...guideLaunch.buildParams(), refine: { ask, guide: current } });
+  };
   const handleRegenerate = async () => {
     if (!guideLaunch.canLaunch || regenerating) return;
     setRegenerating(true);
@@ -384,7 +394,16 @@ function ActiveGuide({
           focusedFile={focusedFile}
           onFocusFile={setFocusedFile}
           onRegenerate={guideLaunch.canLaunch && !regenerating ? handleRegenerate : undefined}
-          headerActions={<GuideExportButton jobId={jobId} />}
+          headerActions={
+            <>
+              <GuideRefineButton
+                guide={guide}
+                canLaunch={guideLaunch.canLaunch && !regenerating}
+                onRefine={handleRefine}
+              />
+              <GuideExportButton jobId={jobId} />
+            </>
+          }
         />
       </ReviewGuideHost>
     </div>

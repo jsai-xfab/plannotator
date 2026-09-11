@@ -30,6 +30,10 @@ export interface RenderedMarkdownProps {
   githubRepo?: string;
   /** Render ```mermaid / ```dot fences as pictures (default true). */
   renderDiagrams?: boolean;
+  /** Keep a diagram's zoom and expand controls visible instead of revealing
+   *  them on hover. Set it where the column is too narrow to read a diagram in
+   *  place, so the reader can see that enlarging it is possible. */
+  alwaysShowDiagramControls?: boolean;
 }
 
 export const RenderedMarkdown: React.FC<RenderedMarkdownProps> = ({
@@ -40,6 +44,7 @@ export const RenderedMarkdown: React.FC<RenderedMarkdownProps> = ({
   onOpenCodeFile,
   githubRepo,
   renderDiagrams = true,
+  alwaysShowDiagramControls = false,
 }) => {
   const groups = useMemo(() => groupBlocks(parseMarkdownToBlocks(markdown)), [markdown]);
   const cb = { onImageClick, onOpenLinkedDoc, onOpenCodeFile, githubRepo };
@@ -60,7 +65,7 @@ export const RenderedMarkdown: React.FC<RenderedMarkdownProps> = ({
         const block = group.block;
         if (renderDiagrams && block.type === 'code') {
           if (isMermaidLanguage(block.language)) {
-            return <MermaidBlock key={block.id} block={block} />;
+            return <MermaidBlock key={block.id} block={block} alwaysShowControls={alwaysShowDiagramControls} />;
           }
           if (isGraphvizLanguage(block.language)) {
             return <GraphvizBlock key={block.id} block={block} />;

@@ -40,6 +40,14 @@ export type AgentLaunchParams = {
   /** Reviewer-supplied extra instructions (#1265), appended to the Guided
    *  Review organizer prompt. Guide launches only; other providers ignore it. */
   instructions?: string;
+  /** Refine an existing guide instead of organizing from nothing: the guide
+   *  the reader is looking at, plus the change they asked for ("break chapter
+   *  three into its own chapters"). Guide launches only.
+   *
+   *  Separate from `instructions` on purpose. `instructions` is a standing
+   *  preference, capped at 2000 characters and persisted for every future
+   *  guide; a refinement is neither standing nor small. */
+  refine?: { ask: string; guide: unknown };
 };
 
 /** Does a job belong to the given review context? Jobs launched against a PR

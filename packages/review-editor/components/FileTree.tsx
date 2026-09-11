@@ -24,6 +24,7 @@ import { Paperclip } from 'lucide-react';
 
 import { SidebarActionRow, SemanticDiffRow, CallFlowRow, AllFilesRow } from './PanelNavRows';
 import { GeneratedFilesRow } from './GeneratedFilesRow';
+import { ChapterFilterRow } from './ChapterFilterRow';
 import { PanelControlsRow, PanelSearchField } from './PanelChrome';
 
 interface FileTreeProps {
@@ -114,6 +115,10 @@ interface FileTreeProps {
   scrollHighlightIndex?: number;
   /** Files of the guide chapter being read — highlighted while the guide is open. */
   chapterFiles?: Set<string>;
+  /** True when the tree shows only `chapterFiles`. */
+  chapterOnly?: boolean;
+  /** Omit to hide the chapter-filter row (e.g. no guide open). */
+  onToggleChapterOnly?: () => void;
   /** Absolute repo root for the "Copy full path" context menu item. Null/undefined hides the option (e.g. PR review mode). */
   repoRoot?: string | null;
   /** Current panel-view selection. The tree also renders as the FALLBACK for a
@@ -207,6 +212,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
   onToggleGeneratedFiles,
   scrollHighlightIndex,
   chapterFiles,
+  chapterOnly = false,
+  onToggleChapterOnly,
   repoRoot,
   panelView = 'tree',
   onSwitchToSections,
@@ -559,6 +566,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
               onToggle={onToggleGeneratedFiles}
             />
           )}
+          {onToggleChapterOnly && (
+            <ChapterFilterRow
+              chapterFileCount={chapterFiles?.size ?? 0}
+              filtering={chapterOnly}
+              onToggle={onToggleChapterOnly}
+            />
+          )}
           {panelControls}
           {searchField}
 
@@ -597,6 +611,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   }
                   scrollHighlightIndex={isAllFilesActive ? scrollHighlightIndex : undefined}
                   chapterFiles={chapterFiles}
+                  chapterOnly={chapterOnly}
                   onSelectFile={onSelectFile}
                   onDoubleClickFile={onDoubleClickFile}
                   viewedFiles={viewedFiles}

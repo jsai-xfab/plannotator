@@ -73,6 +73,10 @@ interface GuideSectionCardProps {
   revealTarget: { filePath: string; token: number } | null;
   onActivate: (filePath: string) => void;
   onRequestReveal: (filePath: string) => void;
+  /** Collapse-all / expand-all from the guide header. The token identifies one
+   *  press, so a card applies each press once and the reader can still expand a
+   *  single chapter afterwards without the header forcing it shut again. */
+  collapseSignal?: { collapsed: boolean; token: number } | null;
 }
 
 /**
@@ -92,6 +96,7 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
   revealTarget,
   onActivate,
   onRequestReveal,
+  collapseSignal,
 }) => {
   const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
   const host = useGuideHost();
@@ -123,6 +128,15 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetBelongsHere?.token]);
 
+  // Apply one collapse-all press. Keyed on the token, not the boolean, so
+  // pressing collapse twice still re-collapses a chapter the reader reopened
+  // in between.
+  useEffect(() => {
+    if (!collapseSignal) return;
+    setCollapsedOverride(collapseSignal.collapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapseSignal?.token]);
+
   const handleToggleReviewed = () => {
     setCollapsedOverride(null);
     onToggleReviewed?.();
@@ -150,6 +164,9 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/70">{section.title}</span>
           <span className="flex-shrink-0 text-[11px] text-muted-foreground/60">
             {section.diffs.length} diff{section.diffs.length !== 1 ? 's' : ''}
+            {section.subsections && section.subsections.length > 0
+              ? ` · ${section.subsections.length} parts`
+              : ''}
             {reviewed ? ' · reviewed' : ''}
           </span>
           <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground/40">{position}</span>
@@ -204,6 +221,29 @@ export const GuideSectionCard: React.FC<GuideSectionCardProps> = ({
                 ) : (
                   renderMarkdownProse(section.overview, { tone: 'muted' })
                 )}
+              </div>
+            )}
+
+            {/* Named parts of this chapter. Rare by design: the prompt asks for
+                them only when a chapter holds a distinct second step, two file
+                roles, or two diagrams. A chapter without them renders exactly
+                as it did before subsections existed. */}
+            {section.subsections && section.subsections.length > 0 && (
+              <div className="mt-4 space-y-4 md:flex-none">
+                {section.subsections.map((part, partIndex) => (
+                  <section key={`${part.title}:${partIndex}`} className="border-l-2 border-border/50 pl-3">
+                    <h4 className="text-[12.5px] font-semibold leading-snug text-foreground/90">{part.title}</h4>
+                    {part.body && (
+                      <div className="mt-1.5 space-y-2.5">
+                        {host.ProseRenderer ? (
+                          <host.ProseRenderer markdown={part.body} tone="muted" />
+                        ) : (
+                          renderMarkdownProse(part.body, { tone: 'muted' })
+                        )}
+                      </div>
+                    )}
+                  </section>
+                ))}
               </div>
             )}
 

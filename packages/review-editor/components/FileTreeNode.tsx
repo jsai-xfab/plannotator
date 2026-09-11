@@ -24,6 +24,10 @@ interface FileTreeNodeProps {
   /** Files of the guide chapter being read. Marked so the chapter's shape in
    *  the repository is visible while reading it. */
   chapterFiles?: Set<string>;
+  /** Show ONLY the chapter's files. Off by default: a reader who loses the
+   *  surrounding tree also loses the repository shape, which is the reason the
+   *  tree stays open during a guide at all. */
+  chapterOnly?: boolean;
   /** Absolute repo root used to build the "Copy full path" menu item. Null in PR-review mode (files aren't on local disk). */
   repoRoot?: string | null;
   /** Since-base mode extras: sidecar lookup for untracked (U) / staged (dot)
@@ -34,21 +38,34 @@ interface FileTreeNodeProps {
   showStageControls?: boolean;
 }
 
-function hasVisibleChildren(
-  node: TreeNode,
-  viewedFiles: Set<string>,
-  activeFileIndex: number,
-  hideViewedFiles: boolean,
-): boolean {
-  if (!hideViewedFiles) return true;
+/** Filters that hide a file ROW without removing it from the `files` array.
+ *  Row-level, deliberately: `fileIndex` is a position in that array and every
+ *  selection callback uses it, so filtering the array itself would point every
+ *  click at the wrong file. */
+interface RowFilters {
+  viewedFiles: Set<string>;
+  activeFileIndex: number;
+  hideViewedFiles: boolean;
+  chapterFiles?: Set<string>;
+  chapterOnly: boolean;
+}
+
+/** Whether one file row survives the active filters. The active file always
+ *  survives: hiding the row the reader is looking at reads as a bug. */
+function isFileRowVisible(node: TreeNode, filters: RowFilters): boolean {
+  if (node.fileIndex === filters.activeFileIndex) return true;
+  if (filters.hideViewedFiles && filters.viewedFiles.has(node.path)) return false;
+  if (filters.chapterOnly && filters.chapterFiles && !filters.chapterFiles.has(node.path)) return false;
+  return true;
+}
+
+function hasVisibleChildren(node: TreeNode, filters: RowFilters): boolean {
+  if (!filters.hideViewedFiles && !filters.chapterOnly) return true;
   if (!node.children) return false;
 
-  return node.children.some(child => {
-    if (child.type === 'file') {
-      return child.fileIndex === activeFileIndex || !viewedFiles.has(child.path);
-    }
-    return hasVisibleChildren(child, viewedFiles, activeFileIndex, hideViewedFiles);
-  });
+  return node.children.some(child =>
+    child.type === 'file' ? isFileRowVisible(child, filters) : hasVisibleChildren(child, filters),
+  );
 }
 
 export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
@@ -66,6 +83,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   stagedFiles,
   scrollHighlightIndex,
   chapterFiles,
+  chapterOnly = false,
   repoRoot,
   getSectionEntry,
   onStageFile,
@@ -73,9 +91,10 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   showStageControls = true,
 }) => {
   const paddingLeft = 4 + node.depth * 8;
+  const filters: RowFilters = { viewedFiles, activeFileIndex, hideViewedFiles, chapterFiles, chapterOnly };
 
   if (node.type === 'folder') {
-    if (!hasVisibleChildren(node, viewedFiles, activeFileIndex, hideViewedFiles)) {
+    if (!hasVisibleChildren(node, filters)) {
       return null;
     }
 
@@ -126,6 +145,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
             stagedFiles={stagedFiles}
             scrollHighlightIndex={scrollHighlightIndex}
             chapterFiles={chapterFiles}
+            chapterOnly={chapterOnly}
             repoRoot={repoRoot}
             getSectionEntry={getSectionEntry}
             onStageFile={onStageFile}
@@ -156,7 +176,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   // unstaged this session would render staged and invert the next toggle.
   const isStageable = sinceBaseMode && !!onStageFile && sectionEntry != null && sectionEntry.group !== 'committed';
 
-  if (hideViewedFiles && isViewed && !isActive) {
+  if (!isFileRowVisible(node, filters)) {
     return null;
   }
 

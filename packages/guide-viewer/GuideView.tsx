@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronsDownUp } from 'lucide-react';
 import type { CodeGuideData, GuideSection } from '@plannotator/core/guide';
 import type { DiffFile } from './types';
 import { useGuideHost } from './host';
@@ -141,6 +142,21 @@ export const GuideView: React.FC<GuideViewProps> = ({
     handleRequestReveal(activeSearchMatch.filePath);
   }, [activeSearchMatch?.id, activeSearchMatch?.filePath, handleRequestReveal]);
 
+  // Collapse-all lives here, not in each card, because one control has to drive
+  // every card. The token identifies one press; a card applies it once and then
+  // owns its own state again, so expanding one chapter afterwards sticks.
+  const collapseTokenRef = useRef(0);
+  const [collapseSignal, setCollapseSignal] = useState<{ collapsed: boolean; token: number } | null>(null);
+  const allCollapsed = collapseSignal?.collapsed === true;
+  const handleCollapseAll = useCallback(() => {
+    collapseTokenRef.current += 1;
+    setCollapseSignal((current) => ({ collapsed: !(current?.collapsed === true), token: collapseTokenRef.current }));
+  }, []);
+
+  // Loose ends annotate files that keep their chapters, so this is a reading
+  // aid rather than a section: no reviewed checkbox, no diffs of its own.
+  const looseEnds = guide.looseEnds ?? [];
+
   const unplacedSection = useMemo<GuideSection | null>(
     () =>
       hasUnplaced
@@ -199,7 +215,19 @@ export const GuideView: React.FC<GuideViewProps> = ({
         )}
       </div>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleCollapseAll}
+          className="flex items-center gap-1.5 rounded-md border border-border/50 px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+          title={allCollapsed ? 'Expand every chapter' : 'Collapse every chapter to see the whole breakdown'}
+        >
+          <ChevronsDownUp className={allCollapsed ? 'rotate-180' : ''} size={12} />
+          {allCollapsed ? 'Expand all' : 'Collapse all'}
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-4">
         {guide.sections.map((section, index) => (
           <GuideSectionCard
             key={`${section.title}:${index}`}
@@ -213,6 +241,7 @@ export const GuideView: React.FC<GuideViewProps> = ({
             revealTarget={revealTarget}
             onActivate={onFocusFile}
             onRequestReveal={handleRequestReveal}
+            collapseSignal={collapseSignal}
           />
         ))}
 
@@ -227,7 +256,32 @@ export const GuideView: React.FC<GuideViewProps> = ({
             revealTarget={revealTarget}
             onActivate={onFocusFile}
             onRequestReveal={handleRequestReveal}
+            collapseSignal={collapseSignal}
           />
+        )}
+
+        {looseEnds.length > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] px-4 py-4 md:px-6 md:py-5">
+            <h3 className="text-[15px] font-semibold leading-snug text-foreground">Loose ends</h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+              Code that looks out of place on its own evidence, not on the subject of the change. Each
+              file keeps its chapter above. The guide states what it saw; you decide.
+            </p>
+            <ul className="mt-3.5 space-y-2.5">
+              {looseEnds.map((entry, index) => (
+                <li key={`${entry.file}:${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => handleRequestReveal(entry.file)}
+                    className="block w-full rounded-md border border-border/50 bg-background px-2.5 py-2 text-left transition-colors hover:border-border"
+                  >
+                    <span className="block truncate font-mono text-[11px] font-medium text-foreground">{entry.file}</span>
+                    <span className="mt-1 block text-[12px] leading-relaxed text-muted-foreground">{entry.note}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </GuideViewportProvider>

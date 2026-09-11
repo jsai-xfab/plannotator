@@ -534,6 +534,15 @@ const ReviewApp: React.FC = () => {
       return new Set(paths);
     });
   }, []);
+  // Narrow the tree to the chapter. Off by default, because the surrounding
+  // tree is the shape the highlight is read against. Reset on guide close so
+  // the next guide starts from the full tree rather than a filter the reader
+  // left on and forgot.
+  const [chapterOnly, setChapterOnly] = useState(false);
+  const handleToggleChapterOnly = useCallback(() => setChapterOnly(value => !value), []);
+  useEffect(() => {
+    if (!guideOpen) setChapterOnly(false);
+  }, [guideOpen]);
   useEffect(() => {
     // BACKSTOP only — this effect runs AFTER a switched guide's keyed cards
     // have mounted (child effects before parent effects), so every
@@ -5143,6 +5152,8 @@ const ReviewApp: React.FC = () => {
                 activeFileIndex={isAllFilesActive || isSemanticDiffActive || isCallFlowActive || isPROverviewActive ? -1 : activeFileIndex}
                 scrollHighlightIndex={isAllFilesActive && allFilesVisibleFile ? files.findIndex(f => f.path === allFilesVisibleFile) : undefined}
                 chapterFiles={guideOpen ? guideChapterFiles : undefined}
+                chapterOnly={chapterOnly}
+                onToggleChapterOnly={guideOpen && guideChapterFiles.size > 0 ? handleToggleChapterOnly : undefined}
                 onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
                 onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}
                 enableKeyboardNav={!showExportModal && hasSearchableFiles}
@@ -5263,6 +5274,8 @@ const ReviewApp: React.FC = () => {
                 onToggleGeneratedFiles={handleToggleGeneratedFiles}
                 scrollHighlightIndex={isAllFilesActive && allFilesVisibleFile ? files.findIndex(f => f.path === allFilesVisibleFile) : undefined}
                 chapterFiles={guideOpen ? guideChapterFiles : undefined}
+                chapterOnly={chapterOnly}
+                onToggleChapterOnly={guideOpen && guideChapterFiles.size > 0 ? handleToggleChapterOnly : undefined}
                 onSelectFile={(index) => completeNavigatorSelection(() => handleFilePreview(index))}
                 onDoubleClickFile={(index) => completeNavigatorSelection(() => handleFilePinned(index))}
                 annotations={allAnnotations}
